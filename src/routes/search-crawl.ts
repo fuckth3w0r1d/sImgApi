@@ -1,16 +1,49 @@
 import { Hono } from 'hono'
-import sharp from 'sharp'
 import { nanoid } from 'nanoid'
 import { writeFile } from 'node:fs/promises'
 import { isAllowedMime, extForMime } from '../lib/validate.js'
 import { addImage, getUploadPath, ensureUploadDir } from '../lib/storage.js'
-import { downloadImage } from '../lib/crawler.js'
+import { downloadImage, extractCrawledImages } from '../lib/crawler.js'
 import { analyzeWithAI, inferCategoryFromTags } from '../lib/tagger.js'
 import { searchImages, isQualityDomain } from '../lib/search.js'
-import { fetchFromGallery } from '../lib/gallery.js'
 import { CATEGORIES, type Category, type ImageMeta } from '../types.js'
 
 const searchCrawl = new Hono()
+
+/** Read image dimensions from buffer magic bytes (JPEG, PNG, GIF, WebP). */
+function imageDimensions(buf: Buffer): { width: number; height: number } {
+  // PNG: 8-byte sig, then IHDR chunk at offset 8: width at 16, height at 20
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf.length >= 24) {
+    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) }
+  }
+  // JPEG: scan for SOF marker
+  if (buf[0] === 0xff && buf[1] === 0xd8) {
+    let i = 2
+    while (i < buf.length - 8) {
+      if (buf[i] !== 0xff) break
+      const marker = buf[i + 1]
+      if (marker >= 0xc0 && marker <= 0xc3) {
+        return { width: buf.readUInt16BE(i + 7), height: buf.readUInt16BE(i + 5) }
+      }
+      i += 2 + buf.readUInt16BE(i + 2)
+    }
+  }
+  // GIF: width at 6, height at 8 (little-endian)
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf.length >= 10) {
+    return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) }
+  }
+  // WebP: RIFF....WEBP VP8 .... width/height at specific offsets
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf.length >= 30) {
+    // VP8 lossy: width at 26 (14 bits), height at 28 (14 bits)
+    if (buf[12] === 0x56 && buf[13] === 0x50 && buf[14] === 0x38 && buf[15] === 0x20) {
+      return {
+        width: (buf.readUInt16LE(26) & 0x3fff) + 1,
+        height: (buf.readUInt16LE(28) & 0x3fff) + 1,
+      }
+    }
+  }
+  return { width: 0, height: 0 }
+}
 
 searchCrawl.post('/', async (c) => {
   const maxSize = parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10)
@@ -55,7 +88,8 @@ searchCrawl.post('/', async (c) => {
 
   if (galleryUrl) {
     try {
-      candidates = await fetchFromGallery(galleryUrl, tag, limit * 2)
+      const crawled = await extractCrawledImages(galleryUrl)
+      candidates = crawled.map((c) => ({ imageUrl: c.url, htmlTags: c.htmlTags, referer: c.referer }))
     } catch (err) {
       return c.json({ error: `Gallery fetch failed: ${(err as Error).message}` }, 502)
     }
@@ -116,17 +150,7 @@ searchCrawl.post('/', async (c) => {
       continue
     }
 
-    let width: number
-    let height: number
-    try {
-      const meta = await sharp(buffer).metadata()
-      width = meta.width ?? 0
-      height = meta.height ?? 0
-    } catch {
-      skipped.push({ url: imgUrl, reason: 'Failed to read image metadata' })
-      continue
-    }
-
+    const { width, height } = imageDimensions(buffer)
     if (width < minWidth || height < minHeight) {
       skipped.push({ url: imgUrl, reason: `Too small: ${width}x${height} (min ${minWidth}x${minHeight})` })
       continue

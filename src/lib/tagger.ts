@@ -12,26 +12,6 @@ function cleanTags(raw: string[]): string[] {
   ]
 }
 
-const CATEGORY_KEYWORDS: Record<Category, string[]> = {
-  '二次元': ['anime', 'manga', 'illustration', 'cartoon', 'art', 'drawing', 'painted', '动漫', '插画', '二次元'],
-  '真人模特': ['model', 'fashion', 'portrait', 'woman', 'man', 'girl', 'boy', 'person', 'people', 'studio', '模特', '写真'],
-  '风景': ['landscape', 'nature', 'scenery', 'mountain', 'forest', 'sky', 'ocean', 'sea', 'river', 'lake', 'sunset', '风景', '自然'],
-  '人像': ['face', 'headshot', 'selfie', 'close-up', 'closeup', '人像', '肖像'],
-  '动物': ['animal', 'cat', 'dog', 'bird', 'wildlife', 'pet', 'fish', 'horse', 'lion', 'tiger', '动物', '猫', '狗'],
-  '美食': ['food', 'meal', 'dish', 'cooking', 'recipe', 'cuisine', 'restaurant', 'dessert', 'cake', '美食', '食物'],
-  '建筑': ['architecture', 'building', 'city', 'urban', 'house', 'bridge', 'tower', 'street', '建筑', '城市'],
-  '其他': [],
-}
-
-export function inferCategoryFromTags(tags: string[]): Category | undefined {
-  const lower = tags.map((t) => t.toLowerCase())
-  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS) as [Category, string[]][]) {
-    if (cat === '其他') continue
-    if (keywords.some((kw) => lower.some((t) => t.includes(kw)))) return cat
-  }
-  return undefined
-}
-
 function isValidCategory(val: unknown): val is Category {
   return typeof val === 'string' && (CATEGORIES as readonly string[]).includes(val)
 }
@@ -53,6 +33,25 @@ export function extractTagsFromHtml(imgEl: HTMLElement, _pageUrl: string): strin
   }
 
   return cleanTags(candidates)
+}
+
+export function inferCategoryFromTags(tags: string[]): Category | undefined {
+  const CATEGORY_KEYWORDS: Record<Category, string[]> = {
+    '二次元': ['anime', 'manga', 'illustration', 'cartoon', 'art', 'drawing', 'painted', '动漫', '插画', '二次元'],
+    '真人模特': ['model', 'fashion', 'portrait', 'woman', 'man', 'girl', 'boy', 'person', 'people', 'studio', '模特', '写真'],
+    '风景': ['landscape', 'nature', 'scenery', 'mountain', 'forest', 'sky', 'ocean', 'sea', 'river', 'lake', 'sunset', '风景', '自然'],
+    '人像': ['face', 'headshot', 'selfie', 'close-up', 'closeup', '人像', '肖像'],
+    '动物': ['animal', 'cat', 'dog', 'bird', 'wildlife', 'pet', 'fish', 'horse', 'lion', 'tiger', '动物', '猫', '狗'],
+    '美食': ['food', 'meal', 'dish', 'cooking', 'recipe', 'cuisine', 'restaurant', 'dessert', 'cake', '美食', '食物'],
+    '建筑': ['architecture', 'building', 'city', 'urban', 'house', 'bridge', 'tower', 'street', '建筑', '城市'],
+    '其他': [],
+  }
+  const lower = tags.map((t) => t.toLowerCase())
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS) as [Category, string[]][]) {
+    if (cat === '其他') continue
+    if (keywords.some((kw) => lower.some((t) => t.includes(kw)))) return cat
+  }
+  return undefined
 }
 
 export async function analyzeWithAI(

@@ -32,10 +32,3 @@ export interface ListQuery {
   tag?: string;
   category?: string;
 }
-
-export interface ServeQuery {
-  w?: string;
-  h?: string;
-  q?: string;
-  f?: string;
-}
