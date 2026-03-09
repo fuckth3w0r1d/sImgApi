@@ -35,13 +35,13 @@ crawl.post('/', async (c) => {
     await ensureUploadDir();
     const saved = [];
     const skipped = [];
-    for (const { url: imgUrl, htmlTags } of crawledImages) {
+    for (const { url: imgUrl, htmlTags, referer } of crawledImages) {
         let buffer;
         let mime;
         let originalName;
         try {
             ;
-            ({ buffer, mime, originalName } = await downloadImage(imgUrl));
+            ({ buffer, mime, originalName } = await downloadImage(imgUrl, referer));
         }
         catch (err) {
             skipped.push({ url: imgUrl, reason: `Download failed: ${err.message}` });

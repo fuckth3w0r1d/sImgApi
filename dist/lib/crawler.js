@@ -44,7 +44,7 @@ export async function extractCrawledImages(pageUrl) {
             const abs = new URL(raw, pageUrl).href;
             if (!seen.has(abs)) {
                 seen.add(abs);
-                results.push({ url: abs, htmlTags });
+                results.push({ url: abs, htmlTags, referer: pageUrl });
             }
         }
         catch {
@@ -64,9 +64,12 @@ export async function extractCrawledImages(pageUrl) {
     }
     return results;
 }
-export async function downloadImage(imgUrl) {
+export async function downloadImage(imgUrl, referer) {
     const res = await fetch(imgUrl, {
-        headers: IMAGE_HEADERS,
+        headers: {
+            ...IMAGE_HEADERS,
+            ...(referer ? { 'Referer': referer, 'Sec-Fetch-Site': 'same-site' } : {}),
+        },
     });
     if (!res.ok)
         throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);

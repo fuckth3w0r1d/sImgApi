@@ -25,7 +25,7 @@ crawl.post('/', async (c) => {
   if (!url) return c.json({ error: 'Missing required field: url' }, 400)
 
   // Determine if url is a direct image link or a webpage
-  let crawledImages: { url: string; htmlTags: string[] }[]
+  let crawledImages: { url: string; htmlTags: string[]; referer?: string }[]
   try {
     const direct = await isImageUrl(url)
     crawledImages = direct ? [{ url, htmlTags: [] }] : await extractCrawledImages(url)
@@ -42,13 +42,13 @@ crawl.post('/', async (c) => {
   const saved: ImageMeta[] = []
   const skipped: { url: string; reason: string }[] = []
 
-  for (const { url: imgUrl, htmlTags } of crawledImages) {
+  for (const { url: imgUrl, htmlTags, referer } of crawledImages) {
     let buffer: Buffer
     let mime: string
     let originalName: string
 
     try {
-      ;({ buffer, mime, originalName } = await downloadImage(imgUrl))
+      ;({ buffer, mime, originalName } = await downloadImage(imgUrl, referer))
     } catch (err) {
       skipped.push({ url: imgUrl, reason: `Download failed: ${(err as Error).message}` })
       continue

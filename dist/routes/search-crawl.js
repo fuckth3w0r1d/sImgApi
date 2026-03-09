@@ -67,6 +67,7 @@ searchCrawl.post('/', async (c) => {
     const saved = [];
     const skipped = [];
     for (const candidate of candidates) {
+        const referer = candidate.referer;
         if (saved.length >= limit)
             break;
         const imgUrl = candidate.imageUrl;
@@ -80,7 +81,7 @@ searchCrawl.post('/', async (c) => {
         let originalName;
         try {
             ;
-            ({ buffer, mime, originalName } = await downloadImage(imgUrl));
+            ({ buffer, mime, originalName } = await downloadImage(imgUrl, referer));
         }
         catch (err) {
             skipped.push({ url: imgUrl, reason: `Download failed: ${err.message}` });

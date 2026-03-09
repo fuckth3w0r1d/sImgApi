@@ -3,6 +3,7 @@ import { extractCrawledImages } from './crawler.js'
 export interface GalleryImage {
   imageUrl: string
   htmlTags: string[]
+  referer?: string
 }
 
 async function fetchUnsplash(tag: string | undefined, count: number): Promise<GalleryImage[]> {
@@ -58,7 +59,7 @@ async function fetchPexels(tag: string | undefined, count: number): Promise<Gall
 
 async function fetchGeneric(galleryUrl: string): Promise<GalleryImage[]> {
   const crawled = await extractCrawledImages(galleryUrl)
-  return crawled.map((c) => ({ imageUrl: c.url, htmlTags: c.htmlTags }))
+  return crawled.map((c) => ({ imageUrl: c.url, htmlTags: c.htmlTags, referer: c.referer }))
 }
 
 export async function fetchFromGallery(

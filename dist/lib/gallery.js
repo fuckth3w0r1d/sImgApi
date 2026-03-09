@@ -49,7 +49,7 @@ async function fetchPexels(tag, count) {
 }
 async function fetchGeneric(galleryUrl) {
     const crawled = await extractCrawledImages(galleryUrl);
-    return crawled.map((c) => ({ imageUrl: c.url, htmlTags: c.htmlTags }));
+    return crawled.map((c) => ({ imageUrl: c.url, htmlTags: c.htmlTags, referer: c.referer }));
 }
 export async function fetchFromGallery(galleryUrl, tag, count) {
     let hostname;

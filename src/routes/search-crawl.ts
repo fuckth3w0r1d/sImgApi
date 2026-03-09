@@ -51,7 +51,7 @@ searchCrawl.post('/', async (c) => {
   const limit = Math.min(count, 50)
 
   // Resolve candidates
-  let candidates: { imageUrl: string; htmlTags: string[] }[]
+  let candidates: { imageUrl: string; htmlTags: string[]; referer?: string }[]
 
   if (galleryUrl) {
     try {
@@ -84,6 +84,7 @@ searchCrawl.post('/', async (c) => {
   const skipped: { url: string; reason: string }[] = []
 
   for (const candidate of candidates) {
+    const referer = candidate.referer
     if (saved.length >= limit) break
 
     const imgUrl = candidate.imageUrl
@@ -99,7 +100,7 @@ searchCrawl.post('/', async (c) => {
     let originalName: string
 
     try {
-      ;({ buffer, mime, originalName } = await downloadImage(imgUrl))
+      ;({ buffer, mime, originalName } = await downloadImage(imgUrl, referer))
     } catch (err) {
       skipped.push({ url: imgUrl, reason: `Download failed: ${(err as Error).message}` })
       continue

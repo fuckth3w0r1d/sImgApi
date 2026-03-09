@@ -30,6 +30,7 @@ const IMAGE_HEADERS = {
 export interface CrawledImage {
   url: string
   htmlTags: string[]
+  referer?: string
 }
 
 export async function extractCrawledImages(pageUrl: string): Promise<CrawledImage[]> {
@@ -51,7 +52,7 @@ export async function extractCrawledImages(pageUrl: string): Promise<CrawledImag
       const abs = new URL(raw, pageUrl).href
       if (!seen.has(abs)) {
         seen.add(abs)
-        results.push({ url: abs, htmlTags })
+        results.push({ url: abs, htmlTags, referer: pageUrl })
       }
     } catch {
       // invalid URL, skip
@@ -75,10 +76,14 @@ export async function extractCrawledImages(pageUrl: string): Promise<CrawledImag
 }
 
 export async function downloadImage(
-  imgUrl: string
+  imgUrl: string,
+  referer?: string
 ): Promise<{ buffer: Buffer; mime: string; originalName: string }> {
   const res = await fetch(imgUrl, {
-    headers: IMAGE_HEADERS,
+    headers: {
+      ...IMAGE_HEADERS,
+      ...(referer ? { 'Referer': referer, 'Sec-Fetch-Site': 'same-site' } : {}),
+    },
   })
   if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`)
 
