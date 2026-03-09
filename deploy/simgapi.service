@@ -1,0 +1,20 @@
+[Unit]
+Description=sImgApi - Simple Image API
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+WorkingDirectory=/opt/simgapi
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/opt/simgapi/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=simgapi
+
+[Install]
+WantedBy=multi-user.target

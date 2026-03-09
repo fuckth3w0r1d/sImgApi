@@ -1,0 +1,26 @@
+{
+  "name": "simgapi",
+  "version": "1.0.0",
+  "description": "Simple local image storage API",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "release": "npm run build && node scripts/pack-release.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.7.4",
+    "nanoid": "^5.1.5",
+    "node-html-parser": "^7.1.0",
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
