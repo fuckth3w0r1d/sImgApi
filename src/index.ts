@@ -10,8 +10,6 @@ import { seedFromGalleries } from './lib/seed.js'
 
 const app = new Hono()
 
-app.use('*', logger())
-
 app.get('/health', (c) => c.json({ status: 'ok' }))
 app.route('/images', images)
 app.route('/search-crawl', searchCrawl)

@@ -59,12 +59,10 @@ export async function seedFromGalleries() {
                 ({ buffer, mime } = await downloadImage(imgUrl, galleryUrl));
             }
             catch (err) {
-                console.warn(`[seed] Download failed: ${imgUrl} — ${err.message}`);
                 skipped++;
                 continue;
             }
             if (!isAllowedMime(mime)) {
-                console.warn(`[seed] Skipped (${mime}): ${imgUrl}`);
                 skipped++;
                 continue;
             }
@@ -89,7 +87,9 @@ export async function seedFromGalleries() {
             }
             saved++;
             picIndex++;
-            console.log(`[seed] ✓ [${saved}] ${imgUrl}`);
+            if (saved % 10 === 0) {
+                console.log(`[seed] Downloaded ${saved} image(s) so far...`);
+            }
         }
         console.log(`[seed] ${galleryUrl} done — saved=${saved} skipped=${skipped}`);
     }

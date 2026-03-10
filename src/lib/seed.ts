@@ -64,14 +64,12 @@ export async function seedFromGalleries(): Promise<void> {
       try {
         ;({ buffer, mime } = await downloadImage(imgUrl, galleryUrl))
       } catch (err) {
-        console.warn(`[seed] Download failed: ${imgUrl} — ${(err as Error).message}`)
-        skipped++
+          skipped++
         continue
       }
 
       if (!isAllowedMime(mime)) {
-        console.warn(`[seed] Skipped (${mime}): ${imgUrl}`)
-        skipped++
+          skipped++
         continue
       }
 
@@ -99,7 +97,9 @@ export async function seedFromGalleries(): Promise<void> {
 
       saved++
       picIndex++
-      console.log(`[seed] ✓ [${saved}] ${imgUrl}`)
+      if (saved % 10 === 0) {
+        console.log(`[seed] Downloaded ${saved} image(s) so far...`)
+      }
     }
 
     console.log(`[seed] ${galleryUrl} done — saved=${saved} skipped=${skipped}`)
