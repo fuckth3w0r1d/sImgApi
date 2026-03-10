@@ -2,9 +2,8 @@ import { writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { extractCrawledImages, downloadImage } from './crawler.js';
-import { addImage, findByUrl, getCachePath } from './storage.js';
+import { addImage, findByUrl, getCachePath, nextPicIndex } from './storage.js';
 import { isAllowedMime } from './validate.js';
-import { inferCategoryFromTags } from './tagger-lite.js';
 export async function seedFromGalleries() {
     const raw = process.env.SEED_GALLERIES ?? '';
     const urls = raw.split(',').map((u) => u.trim()).filter((u) => u.length > 0);
@@ -16,12 +15,15 @@ export async function seedFromGalleries() {
         let candidates;
         try {
             const crawled = await extractCrawledImages(galleryUrl);
-            candidates = crawled.map((c) => ({ imageUrl: c.url, htmlTags: c.htmlTags, sourceUrl: galleryUrl }));
+            candidates = crawled.map((c) => ({ imageUrl: c.url, sourceUrl: galleryUrl }));
         }
         catch (err) {
             console.error(`[seed] Failed to crawl ${galleryUrl}: ${err.message}`);
             continue;
         }
+        // All images from this gallery share a setId
+        const setId = nanoid();
+        let picIndex = await nextPicIndex(setId);
         let saved = 0;
         let skipped = 0;
         for (const candidate of candidates) {
@@ -29,7 +31,6 @@ export async function seedFromGalleries() {
             // Skip already indexed
             const existing = await findByUrl(imgUrl);
             if (existing) {
-                // Ensure cache exists for already-indexed images
                 const cachePath = getCachePath(existing.id);
                 if (!existsSync(cachePath)) {
                     try {
@@ -43,7 +44,6 @@ export async function seedFromGalleries() {
                 skipped++;
                 continue;
             }
-            // Validate and download
             let buffer;
             let mime;
             try {
@@ -59,21 +59,18 @@ export async function seedFromGalleries() {
                 continue;
             }
             const id = nanoid();
-            const tags = candidate.htmlTags;
-            const category = inferCategoryFromTags(tags) ?? '其他';
             const meta = {
                 id,
                 url: imgUrl,
-                sourceUrl: candidate.sourceUrl,
+                sourceUrl: galleryUrl,
                 mime,
                 width: 0,
                 height: 0,
                 uploadedAt: new Date().toISOString(),
-                tags,
-                category,
+                setId,
+                picIndex,
             };
             await addImage(meta);
-            // Write cache immediately
             try {
                 await writeFile(getCachePath(id), buffer);
             }
@@ -81,6 +78,7 @@ export async function seedFromGalleries() {
                 // ignore cache write failures
             }
             saved++;
+            picIndex++;
         }
         console.log(`[seed] ${galleryUrl}: saved=${saved} skipped=${skipped}`);
     }

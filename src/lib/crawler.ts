@@ -1,5 +1,4 @@
 import { parse } from 'node-html-parser'
-import { extractTagsFromHtml } from './tagger-lite.js'
 
 const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -29,7 +28,6 @@ const IMAGE_HEADERS = {
 
 export interface CrawledImage {
   url: string
-  htmlTags: string[]
   referer?: string
 }
 
@@ -44,7 +42,7 @@ export async function extractCrawledImages(pageUrl: string): Promise<CrawledImag
   const seen = new Set<string>()
   const results: CrawledImage[] = []
 
-  const tryAdd = (raw: string | undefined, htmlTags: string[]) => {
+  const tryAdd = (raw: string | undefined) => {
     if (!raw) return
     raw = raw.trim()
     if (!raw || raw.startsWith('data:')) return
@@ -52,24 +50,21 @@ export async function extractCrawledImages(pageUrl: string): Promise<CrawledImag
       const abs = new URL(raw, pageUrl).href
       if (!seen.has(abs)) {
         seen.add(abs)
-        results.push({ url: abs, htmlTags, referer: pageUrl })
+        results.push({ url: abs, referer: pageUrl })
       }
     } catch {
       // invalid URL, skip
     }
   }
 
-  // <img src> and <img data-src> (lazy loading)
   for (const img of root.querySelectorAll('img')) {
-    const htmlTags = extractTagsFromHtml(img, pageUrl)
-    tryAdd(img.getAttribute('src'), htmlTags)
-    tryAdd(img.getAttribute('data-src'), htmlTags)
-    tryAdd(img.getAttribute('data-lazy-src'), htmlTags)
+    tryAdd(img.getAttribute('src'))
+    tryAdd(img.getAttribute('data-src'))
+    tryAdd(img.getAttribute('data-lazy-src'))
   }
 
-  // og:image meta (no element context for tags)
   for (const meta of root.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]')) {
-    tryAdd(meta.getAttribute('content'), [])
+    tryAdd(meta.getAttribute('content'))
   }
 
   return results
@@ -78,7 +73,7 @@ export async function extractCrawledImages(pageUrl: string): Promise<CrawledImag
 export async function downloadImage(
   imgUrl: string,
   referer?: string
-): Promise<{ buffer: Buffer; mime: string; originalName: string }> {
+): Promise<{ buffer: Buffer; mime: string }> {
   const res = await fetch(imgUrl, {
     headers: {
       ...IMAGE_HEADERS,
@@ -89,10 +84,8 @@ export async function downloadImage(
 
   const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim()
   const buffer = Buffer.from(await res.arrayBuffer())
-  const pathname = new URL(imgUrl).pathname
-  const originalName = pathname.split('/').pop() ?? 'image'
 
-  return { buffer, mime, originalName }
+  return { buffer, mime }
 }
 
 export async function isImageUrl(url: string): Promise<boolean> {

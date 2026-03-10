@@ -1,13 +1,28 @@
 import { Hono } from 'hono';
-import { listImages, removeImage } from '../lib/storage.js';
+import { listImages, listSets, removeImage } from '../lib/storage.js';
 const images = new Hono();
+// List all images (optionally filtered by setId or mime)
 images.get('/', async (c) => {
     const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
     const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
     const mime = c.req.query('mime');
-    const tag = c.req.query('tag');
-    const category = c.req.query('category');
-    const { items, total } = await listImages(page, limit, mime, tag, category);
+    const setId = c.req.query('setId');
+    const { items, total } = await listImages(page, limit, mime, setId);
+    return c.json({
+        data: items,
+        pagination: {
+            page,
+            limit,
+            total,
+            pages: Math.ceil(total / limit),
+        },
+    });
+});
+// List all sets (grouped by setId)
+images.get('/sets', async (c) => {
+    const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)));
+    const { items, total } = await listSets(page, limit);
     return c.json({
         data: items,
         pagination: {

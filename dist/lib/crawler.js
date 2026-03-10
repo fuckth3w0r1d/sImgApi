@@ -1,5 +1,4 @@
 import { parse } from 'node-html-parser';
-import { extractTagsFromHtml } from './tagger-lite.js';
 const BROWSER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -34,7 +33,7 @@ export async function extractCrawledImages(pageUrl) {
     const root = parse(html);
     const seen = new Set();
     const results = [];
-    const tryAdd = (raw, htmlTags) => {
+    const tryAdd = (raw) => {
         if (!raw)
             return;
         raw = raw.trim();
@@ -44,23 +43,20 @@ export async function extractCrawledImages(pageUrl) {
             const abs = new URL(raw, pageUrl).href;
             if (!seen.has(abs)) {
                 seen.add(abs);
-                results.push({ url: abs, htmlTags, referer: pageUrl });
+                results.push({ url: abs, referer: pageUrl });
             }
         }
         catch {
             // invalid URL, skip
         }
     };
-    // <img src> and <img data-src> (lazy loading)
     for (const img of root.querySelectorAll('img')) {
-        const htmlTags = extractTagsFromHtml(img, pageUrl);
-        tryAdd(img.getAttribute('src'), htmlTags);
-        tryAdd(img.getAttribute('data-src'), htmlTags);
-        tryAdd(img.getAttribute('data-lazy-src'), htmlTags);
+        tryAdd(img.getAttribute('src'));
+        tryAdd(img.getAttribute('data-src'));
+        tryAdd(img.getAttribute('data-lazy-src'));
     }
-    // og:image meta (no element context for tags)
     for (const meta of root.querySelectorAll('meta[property="og:image"], meta[name="twitter:image"]')) {
-        tryAdd(meta.getAttribute('content'), []);
+        tryAdd(meta.getAttribute('content'));
     }
     return results;
 }
@@ -75,9 +71,7 @@ export async function downloadImage(imgUrl, referer) {
         throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);
     const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim();
     const buffer = Buffer.from(await res.arrayBuffer());
-    const pathname = new URL(imgUrl).pathname;
-    const originalName = pathname.split('/').pop() ?? 'image';
-    return { buffer, mime, originalName };
+    return { buffer, mime };
 }
 export async function isImageUrl(url) {
     try {
