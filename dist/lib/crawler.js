@@ -23,9 +23,11 @@ const IMAGE_HEADERS = {
     'Sec-Fetch-Mode': 'no-cors',
     'Sec-Fetch-Site': 'cross-site',
 };
+const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS ?? '15000', 10);
 export async function extractCrawledImages(pageUrl) {
     const res = await fetch(pageUrl, {
         headers: BROWSER_HEADERS,
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok)
         throw new Error(`Failed to fetch page: ${res.status} ${res.statusText}`);
@@ -66,6 +68,7 @@ export async function downloadImage(imgUrl, referer) {
             ...IMAGE_HEADERS,
             ...(referer ? { 'Referer': referer, 'Sec-Fetch-Site': 'same-site' } : {}),
         },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
     if (!res.ok)
         throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`);

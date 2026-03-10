@@ -31,9 +31,12 @@ export interface CrawledImage {
   referer?: string
 }
 
+const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS ?? '15000', 10)
+
 export async function extractCrawledImages(pageUrl: string): Promise<CrawledImage[]> {
   const res = await fetch(pageUrl, {
     headers: BROWSER_HEADERS,
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
   if (!res.ok) throw new Error(`Failed to fetch page: ${res.status} ${res.statusText}`)
 
@@ -79,6 +82,7 @@ export async function downloadImage(
       ...IMAGE_HEADERS,
       ...(referer ? { 'Referer': referer, 'Sec-Fetch-Site': 'same-site' } : {}),
     },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   })
   if (!res.ok) throw new Error(`Failed to fetch image: ${res.status} ${res.statusText}`)
 
