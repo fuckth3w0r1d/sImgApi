@@ -54,11 +54,6 @@ export async function seedFromGalleries() {
         return;
     console.log(`[seed] Starting seed from ${urls.length} gallery URL(s)...`);
     for (const galleryUrl of urls) {
-        const existingSetId = findSetIdBySourceUrl(galleryUrl);
-        if (existingSetId && nextPicIndex(existingSetId) > 0) {
-            console.log(`[seed] Skipping ${galleryUrl} (already seeded)`);
-            continue;
-        }
         console.log(`[seed] Crawling ${galleryUrl}`);
         let candidates;
         try {
@@ -70,7 +65,7 @@ export async function seedFromGalleries() {
             console.error(`[seed] Failed to crawl ${galleryUrl}: ${err.message}`);
             continue;
         }
-        const setId = existingSetId ?? nanoid();
+        const setId = findSetIdBySourceUrl(galleryUrl) ?? nanoid();
         const baseIndex = nextPicIndex(setId);
         let saved = 0;
         let skipped = 0;
