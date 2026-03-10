@@ -5,7 +5,7 @@ import { isAllowedMime, extForMime } from '../lib/validate.js';
 import { addImage, getUploadPath, ensureUploadDir } from '../lib/storage.js';
 import { downloadImage, extractCrawledImages } from '../lib/crawler.js';
 import { analyzeWithAI, inferCategoryFromTags } from '../lib/tagger.js';
-import { searchImages, isQualityDomain } from '../lib/search.js';
+import { searchImages } from '../lib/search.js';
 import { CATEGORIES } from '../types.js';
 const searchCrawl = new Hono();
 /** Read image dimensions from buffer magic bytes (JPEG, PNG, GIF, WebP). */
@@ -44,7 +44,7 @@ function imageDimensions(buf) {
     return { width: 0, height: 0 };
 }
 searchCrawl.post('/', async (c) => {
-    const maxSize = parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10);
+    const maxSize = parseInt(process.env.MAX_FILE_SIZE ?? '31457280', 10);
     const baseUrl = process.env.BASE_URL ?? 'http://localhost:3000';
     let body;
     try {
@@ -105,11 +105,6 @@ searchCrawl.post('/', async (c) => {
         if (saved.length >= limit)
             break;
         const imgUrl = candidate.imageUrl;
-        // Quality domain filter only applies to search engine mode
-        if (!galleryUrl && qualityOnly && !isQualityDomain(imgUrl)) {
-            skipped.push({ url: imgUrl, reason: 'Not a quality image source' });
-            continue;
-        }
         let buffer;
         let mime;
         let originalName;

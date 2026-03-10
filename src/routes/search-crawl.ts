@@ -46,7 +46,7 @@ function imageDimensions(buf: Buffer): { width: number; height: number } {
 }
 
 searchCrawl.post('/', async (c) => {
-  const maxSize = parseInt(process.env.MAX_FILE_SIZE ?? '10485760', 10)
+  const maxSize = parseInt(process.env.MAX_FILE_SIZE ?? '31457280', 10)
   const baseUrl = process.env.BASE_URL ?? 'http://localhost:3000'
 
   let body: {
@@ -123,11 +123,6 @@ searchCrawl.post('/', async (c) => {
 
     const imgUrl = candidate.imageUrl
 
-    // Quality domain filter only applies to search engine mode
-    if (!galleryUrl && qualityOnly && !isQualityDomain(imgUrl)) {
-      skipped.push({ url: imgUrl, reason: 'Not a quality image source' })
-      continue
-    }
 
     let buffer: Buffer
     let mime: string

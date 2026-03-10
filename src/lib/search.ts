@@ -140,18 +140,6 @@ function isChinese(text: string): boolean {
 export async function searchImages(query: string, count: number): Promise<SearchResult[]> {
   const hasGoogle = process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_CX
 
-  if (isChinese(query)) {
-    // Chinese query: try Baidu first, fall back to Bing Chinese
-    try {
-      const results = await searchWithBaidu(query, count)
-      if (results.length > 0) return results
-    } catch {
-      // fall through to Bing
-    }
-    return searchWithBing(query, count)
-  }
-
-  // Non-Chinese: Google CSE if configured, else Bing
   if (hasGoogle) {
     return searchWithGoogle(query, count)
   }
