@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { extractCrawledImages, downloadImage } from './crawler.js';
 import { addImage, findByUrl, getCachePath, nextPicIndex, findSetIdBySourceUrl } from './storage.js';
-import { isAllowedMime } from './validate.js';
+import { isAllowedMime, extForMime } from './validate.js';
 export async function seedFromGalleries() {
     const raw = process.env.SEED_GALLERIES ?? '';
     const urls = raw.split(',').map((u) => u.trim()).filter((u) => u.length > 0);
@@ -37,7 +37,7 @@ export async function seedFromGalleries() {
             // Skip already indexed
             const existing = await findByUrl(imgUrl);
             if (existing) {
-                const cachePath = getCachePath(existing.id);
+                const cachePath = getCachePath(existing.id, extForMime(existing.mime));
                 if (!existsSync(cachePath)) {
                     try {
                         const { buffer } = await downloadImage(imgUrl, galleryUrl);
@@ -78,7 +78,7 @@ export async function seedFromGalleries() {
             };
             await addImage(meta);
             try {
-                await writeFile(getCachePath(id), buffer);
+                await writeFile(getCachePath(id, extForMime(mime)), buffer);
             }
             catch {
                 // ignore cache write failures

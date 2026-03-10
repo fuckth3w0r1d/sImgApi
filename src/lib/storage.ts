@@ -12,8 +12,8 @@ export async function ensureDataDir(): Promise<void> {
   await mkdir(cacheDir, { recursive: true })
 }
 
-export function getCachePath(id: string): string {
-  return join(cacheDir, id)
+export function getCachePath(id: string, ext?: string): string {
+  return join(cacheDir, ext ? `${id}.${ext}` : id)
 }
 
 async function readMeta(): Promise<ImageMeta[]> {

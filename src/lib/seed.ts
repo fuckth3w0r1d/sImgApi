@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs'
 import { nanoid } from 'nanoid'
 import { extractCrawledImages, downloadImage } from './crawler.js'
 import { addImage, findByUrl, getCachePath, nextPicIndex, findSetIdBySourceUrl } from './storage.js'
-import { isAllowedMime } from './validate.js'
+import { isAllowedMime, extForMime } from './validate.js'
 import type { ImageMeta } from '../types.js'
 
 export async function seedFromGalleries(): Promise<void> {
@@ -44,7 +44,7 @@ export async function seedFromGalleries(): Promise<void> {
       // Skip already indexed
       const existing = await findByUrl(imgUrl)
       if (existing) {
-        const cachePath = getCachePath(existing.id)
+        const cachePath = getCachePath(existing.id, extForMime(existing.mime))
         if (!existsSync(cachePath)) {
           try {
             const { buffer } = await downloadImage(imgUrl, galleryUrl)
@@ -88,7 +88,7 @@ export async function seedFromGalleries(): Promise<void> {
       await addImage(meta)
 
       try {
-        await writeFile(getCachePath(id), buffer)
+        await writeFile(getCachePath(id, extForMime(mime)), buffer)
       } catch {
         // ignore cache write failures
       }

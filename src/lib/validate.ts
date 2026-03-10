@@ -18,3 +18,7 @@ export function isAllowedMime(mime: string): boolean {
   return ALLOWED_MIME.has(mime)
 }
 
+export function extForMime(mime: string): string {
+  return EXT_MAP[mime] ?? 'bin'
+}
+

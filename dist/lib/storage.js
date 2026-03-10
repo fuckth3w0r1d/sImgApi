@@ -8,8 +8,8 @@ export async function ensureDataDir() {
     await mkdir(dataDir, { recursive: true });
     await mkdir(cacheDir, { recursive: true });
 }
-export function getCachePath(id) {
-    return join(cacheDir, id);
+export function getCachePath(id, ext) {
+    return join(cacheDir, ext ? `${id}.${ext}` : id);
 }
 async function readMeta() {
     if (!existsSync(metaFile))

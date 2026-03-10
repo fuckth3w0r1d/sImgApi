@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { findById, getCachePath } from '../lib/storage.js'
 import { downloadImage } from '../lib/crawler.js'
+import { extForMime } from '../lib/validate.js'
 
 const proxy = new Hono()
 
@@ -13,7 +14,8 @@ proxy.get('/:id', async (c) => {
     return c.json({ error: 'Not found' }, 404)
   }
 
-  const cachePath = getCachePath(id)
+  const ext = extForMime(meta.mime)
+  const cachePath = getCachePath(id, ext)
 
   let buffer: Buffer
   let mime: string
