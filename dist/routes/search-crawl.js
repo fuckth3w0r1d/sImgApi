@@ -3,8 +3,13 @@ import { nanoid } from 'nanoid';
 import { isAllowedMime } from '../lib/validate.js';
 import { addImage, findByUrl, nextPicIndex, findSetIdBySourceUrl } from '../lib/storage.js';
 import { extractCrawledImages } from '../lib/crawler.js';
-import { searchImages, searchWebPages } from '../lib/search.js';
 const searchCrawl = new Hono();
+/**
+ * POST /search-crawl
+ * Body (one of):
+ *   { galleryUrl: string, count?: number }  — crawl a page and index all images
+ *   { urls: string[], sourceUrl?: string }  — index a list of direct image URLs
+ */
 searchCrawl.post('/', async (c) => {
     let body;
     try {
@@ -13,80 +18,44 @@ searchCrawl.post('/', async (c) => {
     catch {
         return c.json({ error: 'Invalid JSON body' }, 400);
     }
-    const { tag, count = 10, mode = 'image', galleryUrl } = body;
-    if (!galleryUrl && !tag) {
-        return c.json({ error: 'Missing required field: tag or galleryUrl' }, 400);
+    const { galleryUrl, urls, count = 50 } = body;
+    const limit = Math.min(count, 200);
+    if (!galleryUrl && (!urls || urls.length === 0)) {
+        return c.json({ error: 'Missing required field: galleryUrl or urls' }, 400);
     }
-    const limit = Math.min(count, 50);
-    // Resolve page-grouped candidates: each group shares a setId
-    // groups: Map<sourceUrl, candidate[]>
+    // groups: Map<sourceUrl, imageUrl[]>
     const groups = new Map();
     if (galleryUrl) {
         try {
             const crawled = await extractCrawledImages(galleryUrl);
-            groups.set(galleryUrl, crawled.map((c) => ({ imageUrl: c.url, sourceUrl: galleryUrl })));
+            groups.set(galleryUrl, crawled.map((c) => c.url));
         }
         catch (err) {
             return c.json({ error: `Gallery fetch failed: ${err.message}` }, 502);
         }
     }
-    else if (mode === 'page') {
-        let pageUrls;
-        try {
-            pageUrls = await searchWebPages(tag, 5);
-        }
-        catch (err) {
-            return c.json({ error: `Page search failed: ${err.message}` }, 502);
-        }
-        for (const pageUrl of pageUrls) {
-            try {
-                const crawled = await extractCrawledImages(pageUrl);
-                groups.set(pageUrl, crawled.map((c) => ({ imageUrl: c.url, sourceUrl: pageUrl })));
-            }
-            catch {
-                // skip pages that fail to load
-            }
-        }
-    }
     else {
-        // image mode: each image is its own set (no natural grouping)
-        let searchResults;
-        try {
-            searchResults = await searchImages(tag, limit * 2);
-        }
-        catch (err) {
-            return c.json({ error: `Search failed: ${err.message}` }, 502);
-        }
-        // Group by sourceUrl so images from same page share a set
-        for (const r of searchResults) {
-            const src = r.sourceUrl || r.imageUrl;
-            const arr = groups.get(src) ?? [];
-            arr.push({ imageUrl: r.imageUrl, sourceUrl: src });
-            groups.set(src, arr);
-        }
+        const sourceUrl = body.sourceUrl ?? 'direct';
+        groups.set(sourceUrl, urls);
     }
     if (groups.size === 0) {
-        return c.json({ saved: [], skipped: [], query: tag, galleryUrl, requested: limit });
+        return c.json({ saved: [], skipped: [], requested: limit });
     }
     const saved = [];
     const skipped = [];
-    for (const [sourceUrl, candidates] of groups) {
+    for (const [sourceUrl, imageUrls] of groups) {
         if (saved.length >= limit)
             break;
-        // Reuse existing setId for this sourceUrl, or create a new one
         const setId = (await findSetIdBySourceUrl(sourceUrl)) ?? nanoid();
         let picIndex = await nextPicIndex(setId);
-        for (const candidate of candidates) {
+        for (const imgUrl of imageUrls) {
             if (saved.length >= limit)
                 break;
-            const imgUrl = candidate.imageUrl;
-            // Skip already-indexed URLs
             const existing = await findByUrl(imgUrl);
             if (existing) {
                 skipped.push({ url: imgUrl, reason: 'Already indexed' });
                 continue;
             }
-            // Validate via HEAD request
             let mime;
             try {
                 const headRes = await fetch(imgUrl, {
@@ -95,6 +64,7 @@ searchCrawl.post('/', async (c) => {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                         'Referer': sourceUrl,
                     },
+                    signal: AbortSignal.timeout(15000),
                 });
                 if (!headRes.ok) {
                     skipped.push({ url: imgUrl, reason: `HEAD failed: ${headRes.status}` });
@@ -107,7 +77,7 @@ searchCrawl.post('/', async (c) => {
                 continue;
             }
             if (!isAllowedMime(mime)) {
-                skipped.push({ url: imgUrl, reason: `Unsupported MIME type: ${mime}` });
+                skipped.push({ url: imgUrl, reason: `Unsupported MIME: ${mime}` });
                 continue;
             }
             const id = nanoid();
@@ -127,6 +97,6 @@ searchCrawl.post('/', async (c) => {
             picIndex++;
         }
     }
-    return c.json({ saved, skipped, query: tag, galleryUrl, requested: limit });
+    return c.json({ saved, skipped, requested: limit });
 });
 export default searchCrawl;
