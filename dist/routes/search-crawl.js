@@ -6,6 +6,35 @@ import { extractCrawledImages } from '../lib/crawler.js';
 const CONCURRENCY = parseInt(process.env.SEED_CONCURRENCY ?? '5', 10);
 const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS ?? '15000', 10);
 const searchCrawl = new Hono();
+async function probeMime(imgUrl, referer) {
+    // Try HEAD first
+    const headRes = await fetch(imgUrl, {
+        method: 'HEAD',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': referer,
+        },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    }).catch(() => null);
+    if (headRes?.ok) {
+        const mime = (headRes.headers.get('content-type') ?? '').split(';')[0].trim();
+        if (mime)
+            return mime;
+    }
+    // Fall back to GET with Range to minimize data transfer
+    const getRes = await fetch(imgUrl, {
+        method: 'GET',
+        headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': referer,
+            'Range': 'bytes=0-1023',
+        },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    }).catch(() => null);
+    if (!getRes || (!getRes.ok && getRes.status !== 206))
+        return null;
+    return (getRes.headers.get('content-type') ?? '').split(';')[0].trim() || null;
+}
 /**
  * POST /search-crawl
  * Body (one of):
@@ -40,9 +69,6 @@ searchCrawl.post('/', async (c) => {
         const sourceUrl = body.sourceUrl ?? 'direct';
         groups.set(sourceUrl, urls);
     }
-    if (groups.size === 0) {
-        return c.json({ saved: [], skipped: [], requested: limit });
-    }
     const saved = [];
     const skipped = [];
     for (const [sourceUrl, imageUrls] of groups) {
@@ -57,17 +83,9 @@ searchCrawl.post('/', async (c) => {
             const settled = await Promise.allSettled(batch.map(async (imgUrl, j) => {
                 if (findByUrl(imgUrl))
                     return { url: imgUrl, reason: 'Already indexed' };
-                const headRes = await fetch(imgUrl, {
-                    method: 'HEAD',
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                        'Referer': sourceUrl,
-                    },
-                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-                });
-                if (!headRes.ok)
-                    return { url: imgUrl, reason: `HEAD failed: ${headRes.status}` };
-                const mime = (headRes.headers.get('content-type') ?? '').split(';')[0].trim();
+                const mime = await probeMime(imgUrl, sourceUrl);
+                if (!mime)
+                    return { url: imgUrl, reason: 'Fetch failed' };
                 if (!isAllowedMime(mime))
                     return { url: imgUrl, reason: `Unsupported MIME: ${mime}` };
                 return { url: imgUrl, mime, picIndex: picIndex + i + j };
@@ -100,6 +118,7 @@ searchCrawl.post('/', async (c) => {
             };
             addImage(imageMeta);
             saved.push(imageMeta);
+            picIndex++;
         }
     }
     return c.json({ saved, skipped, requested: limit });
