@@ -91,7 +91,7 @@ searchCrawl.post('/', async (c) => {
     const setId = findSetIdBySourceUrl(sourceUrl) ?? nanoid()
     let picIndex = nextPicIndex(setId)
 
-    type Validated = { url: string; mime: string; picIndex: number } | { url: string; reason: string }
+    type Validated = { url: string; mime: string } | { url: string; reason: string }
 
     const toProcess = imageUrls.slice(0, limit - saved.length)
     const results: Validated[] = []
@@ -99,14 +99,14 @@ searchCrawl.post('/', async (c) => {
     for (let i = 0; i < toProcess.length; i += CONCURRENCY) {
       const batch = toProcess.slice(i, i + CONCURRENCY)
       const settled = await Promise.allSettled(
-        batch.map(async (imgUrl, j): Promise<Validated> => {
+        batch.map(async (imgUrl): Promise<Validated> => {
           if (findByUrl(imgUrl)) return { url: imgUrl, reason: 'Already indexed' }
 
           const mime = await probeMime(imgUrl, sourceUrl)
           if (!mime) return { url: imgUrl, reason: 'Fetch failed' }
           if (!isAllowedMime(mime)) return { url: imgUrl, reason: `Unsupported MIME: ${mime}` }
 
-          return { url: imgUrl, mime, picIndex: picIndex + i + j }
+          return { url: imgUrl, mime }
         })
       )
       for (const r of settled) {
@@ -115,7 +115,7 @@ searchCrawl.post('/', async (c) => {
       }
     }
 
-    // Commit valid results
+    // Commit valid results — assign picIndex sequentially here, not in concurrent batch
     for (const r of results) {
       if ('reason' in r) {
         if (r.url) skipped.push({ url: r.url, reason: r.reason })
@@ -131,7 +131,7 @@ searchCrawl.post('/', async (c) => {
         height: 0,
         uploadedAt: new Date().toISOString(),
         setId,
-        picIndex: r.picIndex,
+        picIndex,
       }
       addImage(imageMeta)
       saved.push(imageMeta)

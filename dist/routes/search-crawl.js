@@ -80,7 +80,7 @@ searchCrawl.post('/', async (c) => {
         const results = [];
         for (let i = 0; i < toProcess.length; i += CONCURRENCY) {
             const batch = toProcess.slice(i, i + CONCURRENCY);
-            const settled = await Promise.allSettled(batch.map(async (imgUrl, j) => {
+            const settled = await Promise.allSettled(batch.map(async (imgUrl) => {
                 if (findByUrl(imgUrl))
                     return { url: imgUrl, reason: 'Already indexed' };
                 const mime = await probeMime(imgUrl, sourceUrl);
@@ -88,7 +88,7 @@ searchCrawl.post('/', async (c) => {
                     return { url: imgUrl, reason: 'Fetch failed' };
                 if (!isAllowedMime(mime))
                     return { url: imgUrl, reason: `Unsupported MIME: ${mime}` };
-                return { url: imgUrl, mime, picIndex: picIndex + i + j };
+                return { url: imgUrl, mime };
             }));
             for (const r of settled) {
                 if (r.status === 'fulfilled')
@@ -97,7 +97,7 @@ searchCrawl.post('/', async (c) => {
                     results.push({ url: '', reason: r.reason?.message ?? 'Unknown error' });
             }
         }
-        // Commit valid results
+        // Commit valid results — assign picIndex sequentially here, not in concurrent batch
         for (const r of results) {
             if ('reason' in r) {
                 if (r.url)
@@ -114,7 +114,7 @@ searchCrawl.post('/', async (c) => {
                 height: 0,
                 uploadedAt: new Date().toISOString(),
                 setId,
-                picIndex: r.picIndex,
+                picIndex,
             };
             addImage(imageMeta);
             saved.push(imageMeta);

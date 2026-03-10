@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { listImages, listSets, removeImage } from '../lib/storage.js'
+import { listImages, listSets, removeImage, randomFromRandomSet } from '../lib/storage.js'
 
 const images = new Hono()
 
@@ -39,6 +39,15 @@ images.get('/sets', (c) => {
       pages: Math.ceil(total / limit),
     },
   })
+})
+
+// Return 3 random images from a random set
+images.get('/random', (c) => {
+  const items = randomFromRandomSet(3)
+  if (items.length === 0) {
+    return c.json({ error: 'No images available' }, 404)
+  }
+  return c.json({ data: items, setId: items[0].setId })
 })
 
 images.delete('/:id', async (c) => {

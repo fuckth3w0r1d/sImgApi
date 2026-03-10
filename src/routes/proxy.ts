@@ -4,7 +4,7 @@ import { createReadStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import { findById, getCachePath, cacheExists } from '../lib/storage.js'
 import { downloadImage } from '../lib/crawler.js'
-import { extForMime } from '../lib/validate.js'
+import { extForMime, isAllowedMime } from '../lib/validate.js'
 
 const proxy = new Hono()
 
@@ -15,8 +15,8 @@ proxy.get('/:id', async (c) => {
     return c.json({ error: 'Not found' }, 404)
   }
 
-  const ext = extForMime(meta.mime)
-  const cachePath = getCachePath(id, ext)
+  // Always use stored mime for cache path (consistent across requests)
+  const cachePath = getCachePath(id, extForMime(meta.mime))
 
   if (await cacheExists(cachePath)) {
     const stream = createReadStream(cachePath)
@@ -36,10 +36,13 @@ proxy.get('/:id', async (c) => {
     return c.json({ error: `Failed to fetch image: ${(err as Error).message}` }, 502)
   }
 
-  // Use actual mime from response for both cache path and Content-Type
-  const actualExt = extForMime(mime)
-  const actualCachePath = getCachePath(id, actualExt)
-  await writeFile(actualCachePath, buffer)
+  // Validate MIME from live response before serving
+  if (!isAllowedMime(mime)) {
+    return c.json({ error: `Upstream returned unexpected content type: ${mime}` }, 502)
+  }
+
+  // Write cache using stored mime ext for consistency with cache-hit path
+  await writeFile(cachePath, buffer).catch(() => {})
 
   return new Response(new Uint8Array(buffer), {
     headers: {

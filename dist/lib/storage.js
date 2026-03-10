@@ -107,6 +107,22 @@ export function listImages(page, limit, mime, setId) {
     const items = data.slice((page - 1) * limit, page * limit);
     return { items, total };
 }
+/** Pick a random set, return up to n random images from it. */
+export function randomFromRandomSet(n) {
+    if (store.length === 0)
+        return [];
+    // Collect all unique setIds
+    const setIds = [...new Set(store.map((m) => m.setId))];
+    const setId = setIds[Math.floor(Math.random() * setIds.length)];
+    const members = store.filter((m) => m.setId === setId);
+    // Fisher-Yates shuffle, take first n
+    const arr = [...members];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, n);
+}
 export function listSets(page, limit) {
     const map = new Map();
     for (const m of store) {
