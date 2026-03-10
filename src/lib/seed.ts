@@ -7,12 +7,14 @@ import type { ImageMeta } from '../types.js'
 
 const CONCURRENCY = parseInt(process.env.SEED_CONCURRENCY ?? '5', 10)
 
+type CandidateResult = 'saved' | 'cached' | 'recached' | 'failed' | 'invalid'
+
 async function processCandidate(
   imgUrl: string,
   sourceUrl: string,
   setId: string,
   picIndex: number
-): Promise<'saved' | 'skipped'> {
+): Promise<CandidateResult> {
   const existing = findByUrl(imgUrl)
   if (existing) {
     const cachePath = getCachePath(existing.id, extForMime(existing.mime))
@@ -20,9 +22,12 @@ async function processCandidate(
       try {
         const { buffer } = await downloadImage(imgUrl, sourceUrl)
         await writeFile(cachePath, buffer)
-      } catch { /* ignore */ }
+        return 'recached'
+      } catch {
+        return 'failed'
+      }
     }
-    return 'skipped'
+    return 'cached'
   }
 
   let buffer: Buffer
@@ -30,10 +35,10 @@ async function processCandidate(
   try {
     ;({ buffer, mime } = await downloadImage(imgUrl, sourceUrl))
   } catch {
-    return 'skipped'
+    return 'failed'
   }
 
-  if (!isAllowedMime(mime)) return 'skipped'
+  if (!isAllowedMime(mime)) return 'invalid'
 
   const id = nanoid()
   const meta: ImageMeta = {
@@ -52,7 +57,7 @@ async function processCandidate(
 
   try {
     await writeFile(getCachePath(id, extForMime(mime)), buffer)
-  } catch { /* ignore */ }
+  } catch { /* ignore cache write failure, proxy will re-fetch */ }
 
   return 'saved'
 }
@@ -79,27 +84,29 @@ export async function seedFromGalleries(): Promise<void> {
 
     const setId = findSetIdBySourceUrl(galleryUrl) ?? nanoid()
     const baseIndex = nextPicIndex(setId)
-    let saved = 0
-    let skipped = 0
+    let saved = 0, cached = 0, recached = 0, failed = 0, invalid = 0
     let completed = 0
 
-    // Process in concurrent batches
     for (let i = 0; i < candidates.length; i += CONCURRENCY) {
       const batch = candidates.slice(i, i + CONCURRENCY)
       const results = await Promise.allSettled(
         batch.map((url, j) => processCandidate(url, galleryUrl, setId, baseIndex + i + j))
       )
       for (const r of results) {
-        if (r.status === 'fulfilled' && r.value === 'saved') saved++
-        else skipped++
+        const val = r.status === 'fulfilled' ? r.value : 'failed'
+        if (val === 'saved') saved++
+        else if (val === 'cached') cached++
+        else if (val === 'recached') recached++
+        else if (val === 'invalid') invalid++
+        else failed++
         completed++
         if (completed % 10 === 0) {
-          console.log(`[seed] Progress: ${completed}/${candidates.length} (saved=${saved})`)
+          console.log(`[seed] Progress: ${completed}/${candidates.length} — saved=${saved} recached=${recached} cached=${cached} failed=${failed} invalid=${invalid}`)
         }
       }
     }
 
-    console.log(`[seed] ${galleryUrl} done — saved=${saved} skipped=${skipped}`)
+    console.log(`[seed] ${galleryUrl} done — saved=${saved} recached=${recached} cached=${cached} failed=${failed} invalid=${invalid}`)
   }
 
   console.log('[seed] Done.')

@@ -12,10 +12,13 @@ async function processCandidate(imgUrl, sourceUrl, setId, picIndex) {
             try {
                 const { buffer } = await downloadImage(imgUrl, sourceUrl);
                 await writeFile(cachePath, buffer);
+                return 'recached';
             }
-            catch { /* ignore */ }
+            catch {
+                return 'failed';
+            }
         }
-        return 'skipped';
+        return 'cached';
     }
     let buffer;
     let mime;
@@ -24,10 +27,10 @@ async function processCandidate(imgUrl, sourceUrl, setId, picIndex) {
         ({ buffer, mime } = await downloadImage(imgUrl, sourceUrl));
     }
     catch {
-        return 'skipped';
+        return 'failed';
     }
     if (!isAllowedMime(mime))
-        return 'skipped';
+        return 'invalid';
     const id = nanoid();
     const meta = {
         id,
@@ -44,7 +47,7 @@ async function processCandidate(imgUrl, sourceUrl, setId, picIndex) {
     try {
         await writeFile(getCachePath(id, extForMime(mime)), buffer);
     }
-    catch { /* ignore */ }
+    catch { /* ignore cache write failure, proxy will re-fetch */ }
     return 'saved';
 }
 export async function seedFromGalleries() {
@@ -67,25 +70,30 @@ export async function seedFromGalleries() {
         }
         const setId = findSetIdBySourceUrl(galleryUrl) ?? nanoid();
         const baseIndex = nextPicIndex(setId);
-        let saved = 0;
-        let skipped = 0;
+        let saved = 0, cached = 0, recached = 0, failed = 0, invalid = 0;
         let completed = 0;
-        // Process in concurrent batches
         for (let i = 0; i < candidates.length; i += CONCURRENCY) {
             const batch = candidates.slice(i, i + CONCURRENCY);
             const results = await Promise.allSettled(batch.map((url, j) => processCandidate(url, galleryUrl, setId, baseIndex + i + j)));
             for (const r of results) {
-                if (r.status === 'fulfilled' && r.value === 'saved')
+                const val = r.status === 'fulfilled' ? r.value : 'failed';
+                if (val === 'saved')
                     saved++;
+                else if (val === 'cached')
+                    cached++;
+                else if (val === 'recached')
+                    recached++;
+                else if (val === 'invalid')
+                    invalid++;
                 else
-                    skipped++;
+                    failed++;
                 completed++;
                 if (completed % 10 === 0) {
-                    console.log(`[seed] Progress: ${completed}/${candidates.length} (saved=${saved})`);
+                    console.log(`[seed] Progress: ${completed}/${candidates.length} — saved=${saved} recached=${recached} cached=${cached} failed=${failed} invalid=${invalid}`);
                 }
             }
         }
-        console.log(`[seed] ${galleryUrl} done — saved=${saved} skipped=${skipped}`);
+        console.log(`[seed] ${galleryUrl} done — saved=${saved} recached=${recached} cached=${cached} failed=${failed} invalid=${invalid}`);
     }
     console.log('[seed] Done.');
 }
