@@ -37,9 +37,18 @@ export async function ensureDataDir(): Promise<void> {
   await mkdir(cacheDir, { recursive: true })
   // Load existing metadata into memory
   if (existsSync(metaFile)) {
-    const raw = await readFile(metaFile, 'utf-8')
-    store = JSON.parse(raw) as ImageMeta[]
-    for (const m of store) indexRecord(m)
+    try {
+      const raw = await readFile(metaFile, 'utf-8')
+      store = JSON.parse(raw) as ImageMeta[]
+      for (const m of store) indexRecord(m)
+      console.log(`[storage] Loaded ${store.length} record(s) from metadata`)
+    } catch (err) {
+      console.error(`[storage] metadata.json corrupt, starting fresh: ${(err as Error).message}`)
+      store = []
+      // Back up the corrupt file
+      const backup = metaFile + '.corrupt.' + Date.now()
+      await rename(metaFile, backup).catch(() => {})
+    }
   }
 }
 
