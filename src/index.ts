@@ -6,6 +6,7 @@ import images from './routes/images.js'
 import searchCrawl from './routes/search-crawl.js'
 import proxy from './routes/proxy.js'
 import { ensureDataDir } from './lib/storage.js'
+import { seedFromGalleries } from './lib/seed.js'
 
 const app = new Hono()
 
@@ -28,4 +29,5 @@ await ensureDataDir()
 
 serve({ fetch: app.fetch, port }, () => {
   console.log(`sImgApi running at http://localhost:${port}`)
+  seedFromGalleries().catch((err) => console.error('[seed] Fatal error:', err))
 })
