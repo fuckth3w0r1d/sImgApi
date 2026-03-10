@@ -5,6 +5,7 @@ node_modules/
 # Runtime data
 data/
 cache/
+uploads/
 
 # Corrupt metadata backups
 *.corrupt.*
