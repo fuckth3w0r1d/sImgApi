@@ -15,6 +15,3 @@ const EXT_MAP = {
 export function isAllowedMime(mime) {
     return ALLOWED_MIME.has(mime);
 }
-export function extForMime(mime) {
-    return EXT_MAP[mime] ?? 'bin';
-}

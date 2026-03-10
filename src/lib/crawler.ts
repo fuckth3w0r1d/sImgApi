@@ -88,15 +88,3 @@ export async function downloadImage(
   return { buffer, mime }
 }
 
-export async function isImageUrl(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      method: 'HEAD',
-      headers: IMAGE_HEADERS,
-    })
-    const ct = res.headers.get('content-type') ?? ''
-    return ct.startsWith('image/')
-  } catch {
-    return false
-  }
-}

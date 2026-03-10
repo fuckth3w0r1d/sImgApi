@@ -73,16 +73,3 @@ export async function downloadImage(imgUrl, referer) {
     const buffer = Buffer.from(await res.arrayBuffer());
     return { buffer, mime };
 }
-export async function isImageUrl(url) {
-    try {
-        const res = await fetch(url, {
-            method: 'HEAD',
-            headers: IMAGE_HEADERS,
-        });
-        const ct = res.headers.get('content-type') ?? '';
-        return ct.startsWith('image/');
-    }
-    catch {
-        return false;
-    }
-}

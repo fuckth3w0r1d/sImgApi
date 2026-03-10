@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { nanoid } from 'nanoid';
 import { extractCrawledImages, downloadImage } from './crawler.js';
-import { addImage, findByUrl, getCachePath, nextPicIndex } from './storage.js';
+import { addImage, findByUrl, getCachePath, nextPicIndex, findSetIdBySourceUrl } from './storage.js';
 import { isAllowedMime } from './validate.js';
 export async function seedFromGalleries() {
     const raw = process.env.SEED_GALLERIES ?? '';
@@ -21,8 +21,8 @@ export async function seedFromGalleries() {
             console.error(`[seed] Failed to crawl ${galleryUrl}: ${err.message}`);
             continue;
         }
-        // All images from this gallery share a setId
-        const setId = nanoid();
+        // Reuse existing setId for this gallery URL, or create a new one
+        const setId = (await findSetIdBySourceUrl(galleryUrl)) ?? nanoid();
         let picIndex = await nextPicIndex(setId);
         let saved = 0;
         let skipped = 0;

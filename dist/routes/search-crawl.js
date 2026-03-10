@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
 import { isAllowedMime } from '../lib/validate.js';
-import { addImage, findByUrl, nextPicIndex } from '../lib/storage.js';
+import { addImage, findByUrl, nextPicIndex, findSetIdBySourceUrl } from '../lib/storage.js';
 import { extractCrawledImages } from '../lib/crawler.js';
 import { searchImages, searchWebPages } from '../lib/search.js';
 const searchCrawl = new Hono();
@@ -73,8 +73,8 @@ searchCrawl.post('/', async (c) => {
     for (const [sourceUrl, candidates] of groups) {
         if (saved.length >= limit)
             break;
-        // Assign a shared setId for all images from this source page
-        const setId = nanoid();
+        // Reuse existing setId for this sourceUrl, or create a new one
+        const setId = (await findSetIdBySourceUrl(sourceUrl)) ?? nanoid();
         let picIndex = await nextPicIndex(setId);
         for (const candidate of candidates) {
             if (saved.length >= limit)

@@ -58,6 +58,13 @@ export async function nextPicIndex(setId: string): Promise<number> {
   return members.length
 }
 
+/** Find existing setId for a given sourceUrl, or return null. */
+export async function findSetIdBySourceUrl(sourceUrl: string): Promise<string | null> {
+  const data = await readMeta()
+  const match = data.find((m) => m.sourceUrl === sourceUrl)
+  return match?.setId ?? null
+}
+
 export async function listImages(
   page: number,
   limit: number,
