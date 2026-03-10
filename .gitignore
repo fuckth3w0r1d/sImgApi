@@ -1,5 +1,10 @@
 node_modules/
-uploads/
 .env
 *.log
-release/
+
+# Runtime data
+data/
+cache/
+
+# Corrupt metadata backups
+*.corrupt.*
