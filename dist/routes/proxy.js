@@ -32,7 +32,10 @@ proxy.get('/:id', async (c) => {
     catch (err) {
         return c.json({ error: `Failed to fetch image: ${err.message}` }, 502);
     }
-    await writeFile(cachePath, buffer);
+    // Use actual mime from response for both cache path and Content-Type
+    const actualExt = extForMime(mime);
+    const actualCachePath = getCachePath(id, actualExt);
+    await writeFile(actualCachePath, buffer);
     return new Response(new Uint8Array(buffer), {
         headers: {
             'Content-Type': mime,

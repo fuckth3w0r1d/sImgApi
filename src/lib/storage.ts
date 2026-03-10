@@ -5,7 +5,7 @@ import type { ImageMeta } from '../types.js'
 
 const dataDir = process.env.DATA_DIR ?? './data'
 const metaFile = join(dataDir, 'metadata.json')
-export const cacheDir = process.env.CACHE_DIR ?? './cache'
+const cacheDir = process.env.CACHE_DIR ?? './cache'
 
 // In-memory store
 let store: ImageMeta[] = []
@@ -25,10 +25,11 @@ function indexRecord(m: ImageMeta): void {
 
 function scheduleFlush(): void {
   if (flushTimer) clearTimeout(flushTimer)
-  flushTimer = setTimeout(async () => {
+  flushTimer = setTimeout(() => {
     const tmp = metaFile + '.tmp'
-    await writeFile(tmp, JSON.stringify(store, null, 2))
-    await rename(tmp, metaFile)
+    writeFile(tmp, JSON.stringify(store, null, 2))
+      .then(() => rename(tmp, metaFile))
+      .catch((err) => console.error('[storage] Failed to flush metadata:', err))
   }, 500)
 }
 

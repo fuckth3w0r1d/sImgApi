@@ -10,9 +10,3 @@ export interface ImageMeta {
   picIndex: number;
 }
 
-export interface ListQuery {
-  page?: string;
-  limit?: string;
-  mime?: string;
-  setId?: string;
-}

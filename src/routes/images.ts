@@ -4,13 +4,13 @@ import { listImages, listSets, removeImage } from '../lib/storage.js'
 const images = new Hono()
 
 // List all images (optionally filtered by setId or mime)
-images.get('/', async (c) => {
+images.get('/', (c) => {
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)))
   const mime = c.req.query('mime')
   const setId = c.req.query('setId')
 
-  const { items, total } = await listImages(page, limit, mime, setId)
+  const { items, total } = listImages(page, limit, mime, setId)
 
   return c.json({
     data: items,
@@ -24,11 +24,11 @@ images.get('/', async (c) => {
 })
 
 // List all sets (grouped by setId)
-images.get('/sets', async (c) => {
+images.get('/sets', (c) => {
   const page = Math.max(1, parseInt(c.req.query('page') ?? '1', 10))
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query('limit') ?? '20', 10)))
 
-  const { items, total } = await listSets(page, limit)
+  const { items, total } = listSets(page, limit)
 
   return c.json({
     data: items,
