@@ -1,5 +1,5 @@
 import { parse } from 'node-html-parser'
-import { extractTagsFromHtml } from './tagger.js'
+import { extractTagsFromHtml } from './tagger-lite.js'
 
 const BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',

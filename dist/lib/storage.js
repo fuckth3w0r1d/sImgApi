@@ -1,32 +1,15 @@
-import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-const uploadDir = process.env.UPLOAD_DIR ?? './uploads';
-const metaFile = join(uploadDir, 'metadata.json');
-export async function migrateMetadata() {
-    if (!existsSync(metaFile))
-        return;
-    const raw = await readFile(metaFile, 'utf-8');
-    const data = JSON.parse(raw);
-    let dirty = false;
-    for (const m of data) {
-        if (!m.tags) {
-            m.tags = [];
-            dirty = true;
-        }
-        if (!m.category) {
-            m.category = '其他';
-            dirty = true;
-        }
-    }
-    if (dirty)
-        await writeFile(metaFile, JSON.stringify(data, null, 2));
+const dataDir = process.env.DATA_DIR ?? './data';
+const metaFile = join(dataDir, 'metadata.json');
+export const cacheDir = process.env.CACHE_DIR ?? './cache';
+export async function ensureDataDir() {
+    await mkdir(dataDir, { recursive: true });
+    await mkdir(cacheDir, { recursive: true });
 }
-export async function ensureUploadDir() {
-    await mkdir(uploadDir, { recursive: true });
-}
-export function getUploadPath(filename) {
-    return join(uploadDir, filename);
+export function getCachePath(id) {
+    return join(cacheDir, id);
 }
 async function readMeta() {
     if (!existsSync(metaFile))
@@ -49,13 +32,15 @@ export async function removeImage(id) {
         return null;
     const [removed] = data.splice(idx, 1);
     await writeMeta(data);
-    try {
-        await unlink(getUploadPath(removed.filename));
-    }
-    catch {
-        // file already gone
-    }
     return removed;
+}
+export async function findById(id) {
+    const data = await readMeta();
+    return data.find((m) => m.id === id) ?? null;
+}
+export async function findByUrl(url) {
+    const data = await readMeta();
+    return data.find((m) => m.url === url) ?? null;
 }
 export async function listImages(page, limit, mime, tag, category) {
     let data = await readMeta();
@@ -68,8 +53,4 @@ export async function listImages(page, limit, mime, tag, category) {
     const total = data.length;
     const items = data.slice((page - 1) * limit, page * limit);
     return { items, total };
-}
-export async function findByFilename(filename) {
-    const data = await readMeta();
-    return data.find((m) => m.filename === filename) ?? null;
 }

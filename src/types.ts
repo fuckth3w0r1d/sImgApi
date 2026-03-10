@@ -13,14 +13,12 @@ export type Category = typeof CATEGORIES[number]
 
 export interface ImageMeta {
   id: string;
-  filename: string;
-  originalName: string;
+  url: string;
+  sourceUrl: string;
   mime: string;
-  size: number;
   width: number;
   height: number;
   uploadedAt: string;
-  url: string;
   tags: string[];
   category: Category;
 }

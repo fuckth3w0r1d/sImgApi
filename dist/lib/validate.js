@@ -18,6 +18,3 @@ export function isAllowedMime(mime) {
 export function extForMime(mime) {
     return EXT_MAP[mime] ?? 'bin';
 }
-export function isAllowedFormat(f) {
-    return ['jpeg', 'png', 'webp', 'avif'].includes(f);
-}

@@ -21,7 +21,3 @@ export function isAllowedMime(mime: string): boolean {
 export function extForMime(mime: string): string {
   return EXT_MAP[mime] ?? 'bin'
 }
-
-export function isAllowedFormat(f: string): f is 'jpeg' | 'png' | 'webp' | 'avif' {
-  return ['jpeg', 'png', 'webp', 'avif'].includes(f)
-}

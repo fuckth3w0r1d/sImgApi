@@ -9,7 +9,6 @@ const QUALITY_DOMAINS = [
     'deviantart.com',
     'artstation.com', 'cdna.artstation.com',
     'behance.net',
-    // Chinese quality sources
     'pixiv.net', 'i.pximg.net',
     'konachan.com',
     'zerochan.net',
@@ -18,10 +17,37 @@ const QUALITY_DOMAINS = [
     'sinaimg.cn',
     'photo.weibo.com',
 ];
+// Domains for page-search mode (model/portrait/coser platforms)
+const PAGE_SEARCH_DOMAINS = [
+    'weibo.com',
+    'huaban.com',
+    'tuchong.com',
+    'pinterest.com',
+    'instagram.com',
+    'xiaohongshu.com',
+    'xhslink.com',
+    'douban.com',
+    'meitulu.com',
+    'cosplay.com',
+    'coserzone.com',
+];
+const BING_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+};
 export function isQualityDomain(url) {
     try {
         const hostname = new URL(url).hostname;
         return QUALITY_DOMAINS.some((d) => hostname === d || hostname.endsWith('.' + d));
+    }
+    catch {
+        return false;
+    }
+}
+function isPageSearchDomain(url) {
+    try {
+        const hostname = new URL(url).hostname;
+        return PAGE_SEARCH_DOMAINS.some((d) => hostname === d || hostname.endsWith('.' + d));
     }
     catch {
         return false;
@@ -54,48 +80,9 @@ async function searchWithGoogle(query, count) {
     }
     return results;
 }
-async function searchWithBaidu(query, count) {
-    const url = `https://image.baidu.com/search/index?tn=baiduimage&word=${encodeURIComponent(query)}&pn=0&rn=${Math.min(count * 2, 60)}`;
-    const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-            'Referer': 'https://image.baidu.com/',
-        },
-    });
-    if (!res.ok)
-        throw new Error(`Baidu search failed: ${res.status}`);
-    const html = await res.text();
-    const results = [];
-    // Extract from "hoverURL" or "middleURL" in page data
-    const re = /"hoverURL":"([^"]+)"/g;
-    let m;
-    while ((m = re.exec(html)) !== null && results.length < count) {
-        const imageUrl = m[1];
-        if (imageUrl.startsWith('http')) {
-            results.push({ imageUrl, sourceUrl: imageUrl, title: query });
-        }
-    }
-    // Fallback: middleURL
-    if (results.length === 0) {
-        const re2 = /"middleURL":"([^"]+)"/g;
-        while ((m = re2.exec(html)) !== null && results.length < count) {
-            const imageUrl = m[1];
-            if (imageUrl.startsWith('http')) {
-                results.push({ imageUrl, sourceUrl: imageUrl, title: query });
-            }
-        }
-    }
-    return results;
-}
 async function searchWithBing(query, count) {
     const url = `https://cn.bing.com/images/search?q=${encodeURIComponent(query)}&count=${Math.min(count * 2, 50)}&form=HDRSC2`;
-    const res = await fetch(url, {
-        headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        },
-    });
+    const res = await fetch(url, { headers: BING_HEADERS });
     if (!res.ok)
         throw new Error(`Bing search failed: ${res.status}`);
     const html = await res.text();
@@ -119,13 +106,50 @@ async function searchWithBing(query, count) {
     }
     return results;
 }
-function isChinese(text) {
-    return /[\u4e00-\u9fff]/.test(text);
-}
 export async function searchImages(query, count) {
     const hasGoogle = process.env.GOOGLE_CSE_API_KEY && process.env.GOOGLE_CSE_CX;
     if (hasGoogle) {
         return searchWithGoogle(query, count);
     }
     return searchWithBing(query, count);
+}
+/**
+ * Search Bing web (not image search) for pages matching query,
+ * return URLs from known model/portrait/coser platforms.
+ */
+export async function searchWebPages(query, count) {
+    const url = `https://cn.bing.com/search?q=${encodeURIComponent(query)}&count=${count * 3}&form=QBLH`;
+    const res = await fetch(url, { headers: BING_HEADERS });
+    if (!res.ok)
+        throw new Error(`Bing web search failed: ${res.status}`);
+    const html = await res.text();
+    const results = [];
+    const seen = new Set();
+    // Extract URLs from <cite> tags (Bing renders result URLs in <cite>)
+    const citeRe = new RegExp('<cite[^>]*>(https?://[^<]+)</cite>', 'g');
+    let m;
+    while ((m = citeRe.exec(html)) !== null) {
+        const rawUrl = m[1].replace(/<[^>]+>/g, '').trim();
+        try {
+            const parsed = new URL(rawUrl);
+            const href = parsed.href;
+            if (!seen.has(href) && isPageSearchDomain(href)) {
+                seen.add(href);
+                results.push(href);
+            }
+        }
+        catch { /* skip */ }
+    }
+    // Fallback: extract from href attributes
+    if (results.length === 0) {
+        const hrefRe = new RegExp('href="(https?://(?:(?!bing\.com|microsoft\.com)[^"]+))"', 'g');
+        while ((m = hrefRe.exec(html)) !== null && results.length < count) {
+            const href = m[1];
+            if (!seen.has(href) && isPageSearchDomain(href)) {
+                seen.add(href);
+                results.push(href);
+            }
+        }
+    }
+    return results.slice(0, count);
 }
