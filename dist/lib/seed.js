@@ -22,6 +22,7 @@ export async function seedFromGalleries() {
         try {
             const crawled = await extractCrawledImages(galleryUrl);
             candidates = crawled.map((c) => ({ imageUrl: c.url, sourceUrl: galleryUrl }));
+            console.log(`[seed] Found ${candidates.length} image(s) on page`);
         }
         catch (err) {
             console.error(`[seed] Failed to crawl ${galleryUrl}: ${err.message}`);
@@ -42,6 +43,7 @@ export async function seedFromGalleries() {
                     try {
                         const { buffer } = await downloadImage(imgUrl, galleryUrl);
                         await writeFile(cachePath, buffer);
+                        console.log(`[seed] Re-cached ${imgUrl}`);
                     }
                     catch {
                         // ignore cache failures
@@ -56,11 +58,13 @@ export async function seedFromGalleries() {
                 ;
                 ({ buffer, mime } = await downloadImage(imgUrl, galleryUrl));
             }
-            catch {
+            catch (err) {
+                console.warn(`[seed] Download failed: ${imgUrl} — ${err.message}`);
                 skipped++;
                 continue;
             }
             if (!isAllowedMime(mime)) {
+                console.warn(`[seed] Skipped (${mime}): ${imgUrl}`);
                 skipped++;
                 continue;
             }
@@ -85,8 +89,9 @@ export async function seedFromGalleries() {
             }
             saved++;
             picIndex++;
+            console.log(`[seed] ✓ [${saved}] ${imgUrl}`);
         }
-        console.log(`[seed] ${galleryUrl}: saved=${saved} skipped=${skipped}`);
+        console.log(`[seed] ${galleryUrl} done — saved=${saved} skipped=${skipped}`);
     }
     console.log('[seed] Done.');
 }
