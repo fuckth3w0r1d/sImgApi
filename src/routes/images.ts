@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { listImages, listSets, removeImage, randomFromRandomSet } from '../lib/storage.js'
+import { listImages, listSets, removeImage, removeSet, randomFromRandomSet } from '../lib/storage.js'
 
 const images = new Hono()
 
@@ -48,6 +48,15 @@ images.get('/random', (c) => {
     return c.json({ error: 'No images available' }, 404)
   }
   return c.json({ data: items, setId: items[0].setId })
+})
+
+images.delete('/sets/:setId', (c) => {
+  const setId = c.req.param('setId')
+  const removed = removeSet(setId)
+  if (removed.length === 0) {
+    return c.json({ error: 'Set not found' }, 404)
+  }
+  return c.json({ message: 'Deleted', setId, count: removed.length })
 })
 
 images.delete('/:id', async (c) => {

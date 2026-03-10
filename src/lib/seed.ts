@@ -30,13 +30,17 @@ async function processCandidate(
     return 'cached'
   }
 
-  let buffer: Buffer
-  let mime: string
-  try {
-    ;({ buffer, mime } = await downloadImage(imgUrl, sourceUrl))
-  } catch {
-    return 'failed'
+  let buffer!: Buffer
+  let mime!: string
+  let success = false
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    try {
+      ;({ buffer, mime } = await downloadImage(imgUrl, sourceUrl))
+      success = true
+      break
+    } catch { /* retry */ }
   }
+  if (!success) return 'failed'
 
   if (!isAllowedMime(mime)) return 'invalid'
 

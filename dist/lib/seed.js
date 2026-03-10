@@ -22,13 +22,18 @@ async function processCandidate(imgUrl, sourceUrl, setId, picIndex) {
     }
     let buffer;
     let mime;
-    try {
-        ;
-        ({ buffer, mime } = await downloadImage(imgUrl, sourceUrl));
+    let success = false;
+    for (let attempt = 0; attempt <= 2; attempt++) {
+        try {
+            ;
+            ({ buffer, mime } = await downloadImage(imgUrl, sourceUrl));
+            success = true;
+            break;
+        }
+        catch { /* retry */ }
     }
-    catch {
+    if (!success)
         return 'failed';
-    }
     if (!isAllowedMime(mime))
         return 'invalid';
     const id = nanoid();

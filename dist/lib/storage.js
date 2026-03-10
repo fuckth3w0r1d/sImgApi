@@ -85,6 +85,24 @@ export async function removeImage(id) {
     scheduleFlush();
     return meta;
 }
+export function removeSet(setId) {
+    const members = store.filter((m) => m.setId === setId);
+    if (members.length === 0)
+        return [];
+    store = store.filter((m) => m.setId !== setId);
+    for (const m of members) {
+        byId.delete(m.id);
+        byUrl.delete(m.url);
+    }
+    // Clean up sourceUrl index entries that belonged to this set
+    for (const [src, sid] of bySourceUrl) {
+        if (sid === setId)
+            bySourceUrl.delete(src);
+    }
+    picCount.delete(setId);
+    scheduleFlush();
+    return members;
+}
 export function findById(id) {
     return byId.get(id) ?? null;
 }
