@@ -11,6 +11,12 @@ export async function seedFromGalleries() {
         return;
     console.log(`[seed] Starting seed from ${urls.length} gallery URL(s)...`);
     for (const galleryUrl of urls) {
+        // Skip if already seeded (setId exists and has images)
+        const existingSetId = await findSetIdBySourceUrl(galleryUrl);
+        if (existingSetId && (await nextPicIndex(existingSetId)) > 0) {
+            console.log(`[seed] Skipping ${galleryUrl} (already seeded)`);
+            continue;
+        }
         console.log(`[seed] Crawling ${galleryUrl}`);
         let candidates;
         try {
@@ -22,7 +28,7 @@ export async function seedFromGalleries() {
             continue;
         }
         // Reuse existing setId for this gallery URL, or create a new one
-        const setId = (await findSetIdBySourceUrl(galleryUrl)) ?? nanoid();
+        const setId = existingSetId ?? nanoid();
         let picIndex = await nextPicIndex(setId);
         let saved = 0;
         let skipped = 0;
