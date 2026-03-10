@@ -10,6 +10,7 @@ const byId = new Map();
 const byUrl = new Map();
 const bySourceUrl = new Map(); // sourceUrl -> setId
 const picCount = new Map(); // setId -> count
+const setsByTag = new Map(); // tag -> Set<setId>
 let flushTimer = null;
 function indexRecord(m) {
     byId.set(m.id, m);
@@ -17,6 +18,11 @@ function indexRecord(m) {
     if (!bySourceUrl.has(m.sourceUrl))
         bySourceUrl.set(m.sourceUrl, m.setId);
     picCount.set(m.setId, (picCount.get(m.setId) ?? 0) + 1);
+    if (m.tag) {
+        const s = setsByTag.get(m.tag) ?? new Set();
+        s.add(m.setId);
+        setsByTag.set(m.tag, s);
+    }
 }
 function scheduleFlush() {
     if (flushTimer)
@@ -100,8 +106,53 @@ export function removeSet(setId) {
             bySourceUrl.delete(src);
     }
     picCount.delete(setId);
+    // Clean up tag index
+    for (const [tag, sets] of setsByTag) {
+        sets.delete(setId);
+        if (sets.size === 0)
+            setsByTag.delete(tag);
+    }
     scheduleFlush();
     return members;
+}
+/** Update tag for all images belonging to a sourceUrl. Returns count updated. */
+export function updateTagBySourceUrl(sourceUrl, tag) {
+    let count = 0;
+    for (const m of store) {
+        if (m.sourceUrl === sourceUrl && m.tag !== tag) {
+            m.tag = tag;
+            const s = setsByTag.get(tag) ?? new Set();
+            s.add(m.setId);
+            setsByTag.set(tag, s);
+            count++;
+        }
+    }
+    if (count > 0)
+        scheduleFlush();
+    return count;
+}
+/** Pick a random set from a tag (or any set if no tag), return up to n random images. */
+export function randomFromTag(n, tag) {
+    let setIds;
+    if (tag) {
+        const s = setsByTag.get(tag);
+        if (!s || s.size === 0)
+            return [];
+        setIds = [...s];
+    }
+    else {
+        setIds = [...new Set(store.map((m) => m.setId))];
+    }
+    if (setIds.length === 0)
+        return [];
+    const setId = setIds[Math.floor(Math.random() * setIds.length)];
+    const members = store.filter((m) => m.setId === setId);
+    const arr = [...members];
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr.slice(0, n);
 }
 export function findById(id) {
     return byId.get(id) ?? null;

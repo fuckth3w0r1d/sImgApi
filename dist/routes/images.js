@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { listImages, listSets, removeImage, removeSet, randomFromRandomSet } from '../lib/storage.js';
+import { listImages, listSets, removeImage, removeSet, randomFromTag } from '../lib/storage.js';
 const images = new Hono();
 // List all images (optionally filtered by setId or mime)
 images.get('/', (c) => {
@@ -33,13 +33,14 @@ images.get('/sets', (c) => {
         },
     });
 });
-// Return 3 random images from a random set
+// Return 3 random images from a random set (optionally filtered by tag)
 images.get('/random', (c) => {
-    const items = randomFromRandomSet(3);
+    const tag = c.req.query('tag');
+    const items = randomFromTag(3, tag);
     if (items.length === 0) {
-        return c.json({ error: 'No images available' }, 404);
+        return c.json({ error: tag ? `No images found for tag: ${tag}` : 'No images available' }, 404);
     }
-    return c.json({ data: items, setId: items[0].setId });
+    return c.json({ data: items, setId: items[0].setId, tag: items[0].tag });
 });
 images.delete('/sets/:setId', (c) => {
     const setId = c.req.param('setId');

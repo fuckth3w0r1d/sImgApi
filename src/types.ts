@@ -8,5 +8,6 @@ export interface ImageMeta {
   uploadedAt: string;
   setId: string;
   picIndex: number;
+  tag?: string;
 }
 

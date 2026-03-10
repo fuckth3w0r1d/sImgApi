@@ -1,0 +1,16 @@
+[
+  {
+    "tag": "二次元",
+    "urls": [
+      "https://huaban.com/search?q=anime",
+      "https://site2.com/page1"
+    ]
+  },
+  {
+    "tag": "写真",
+    "urls": [
+      "https://tuchong.com/search/posts/?query=写真",
+      "https://site3.com/page1"
+    ]
+  }
+]

@@ -13,6 +13,7 @@ const byId = new Map<string, ImageMeta>()
 const byUrl = new Map<string, ImageMeta>()
 const bySourceUrl = new Map<string, string>() // sourceUrl -> setId
 const picCount = new Map<string, number>()    // setId -> count
+const setsByTag = new Map<string, Set<string>>() // tag -> Set<setId>
 
 let flushTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -21,6 +22,11 @@ function indexRecord(m: ImageMeta): void {
   byUrl.set(m.url, m)
   if (!bySourceUrl.has(m.sourceUrl)) bySourceUrl.set(m.sourceUrl, m.setId)
   picCount.set(m.setId, (picCount.get(m.setId) ?? 0) + 1)
+  if (m.tag) {
+    const s = setsByTag.get(m.tag) ?? new Set()
+    s.add(m.setId)
+    setsByTag.set(m.tag, s)
+  }
 }
 
 function scheduleFlush(): void {
@@ -101,8 +107,50 @@ export function removeSet(setId: string): ImageMeta[] {
     if (sid === setId) bySourceUrl.delete(src)
   }
   picCount.delete(setId)
+  // Clean up tag index
+  for (const [tag, sets] of setsByTag) {
+    sets.delete(setId)
+    if (sets.size === 0) setsByTag.delete(tag)
+  }
   scheduleFlush()
   return members
+}
+
+/** Update tag for all images belonging to a sourceUrl. Returns count updated. */
+export function updateTagBySourceUrl(sourceUrl: string, tag: string): number {
+  let count = 0
+  for (const m of store) {
+    if (m.sourceUrl === sourceUrl && m.tag !== tag) {
+      m.tag = tag
+      const s = setsByTag.get(tag) ?? new Set()
+      s.add(m.setId)
+      setsByTag.set(tag, s)
+      count++
+    }
+  }
+  if (count > 0) scheduleFlush()
+  return count
+}
+
+/** Pick a random set from a tag (or any set if no tag), return up to n random images. */
+export function randomFromTag(n: number, tag?: string): ImageMeta[] {
+  let setIds: string[]
+  if (tag) {
+    const s = setsByTag.get(tag)
+    if (!s || s.size === 0) return []
+    setIds = [...s]
+  } else {
+    setIds = [...new Set(store.map((m) => m.setId))]
+  }
+  if (setIds.length === 0) return []
+  const setId = setIds[Math.floor(Math.random() * setIds.length)]
+  const members = store.filter((m) => m.setId === setId)
+  const arr = [...members]
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]]
+  }
+  return arr.slice(0, n)
 }
 
 export function findById(id: string): ImageMeta | null {
