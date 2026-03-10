@@ -11,3 +11,16 @@ export interface ImageMeta {
   tag?: string;
 }
 
+export interface NestedSetBlock {
+  sourceUrl: string;
+  uploadedAt: string;
+  images: Omit<ImageMeta, 'tag' | 'setId' | 'sourceUrl'>[];
+}
+
+export interface NestedTagBlock {
+  sets: Record<string, NestedSetBlock>;
+}
+
+export interface NestedMetadata {
+  tags: Record<string, NestedTagBlock>;
+}

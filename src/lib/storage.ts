@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { ImageMeta } from '../types.js'
+import type { ImageMeta, NestedMetadata } from '../types.js'
 
 const dataDir = process.env.DATA_DIR ?? './data'
 const metaFile = join(dataDir, 'metadata.json')
@@ -29,11 +29,29 @@ function indexRecord(m: ImageMeta): void {
   }
 }
 
+function buildNested(): NestedMetadata {
+  const nested: NestedMetadata = { tags: {} }
+  for (const meta of store) {
+    const tagKey = meta.tag ?? '__untagged__'
+    if (!nested.tags[tagKey]) nested.tags[tagKey] = { sets: {} }
+    if (!nested.tags[tagKey].sets[meta.setId]) {
+      nested.tags[tagKey].sets[meta.setId] = {
+        sourceUrl: meta.sourceUrl,
+        uploadedAt: meta.uploadedAt,
+        images: [],
+      }
+    }
+    const { tag: _t, setId: _s, sourceUrl: _u, ...imgFields } = meta
+    nested.tags[tagKey].sets[meta.setId].images.push(imgFields)
+  }
+  return nested
+}
+
 function scheduleFlush(): void {
   if (flushTimer) clearTimeout(flushTimer)
   flushTimer = setTimeout(() => {
     const tmp = metaFile + '.tmp'
-    writeFile(tmp, JSON.stringify(store, null, 2))
+    writeFile(tmp, JSON.stringify(buildNested(), null, 2))
       .then(() => rename(tmp, metaFile))
       .catch((err) => console.error('[storage] Failed to flush metadata:', err))
   }, 500)
@@ -46,9 +64,28 @@ export async function ensureDataDir(): Promise<void> {
   if (existsSync(metaFile)) {
     try {
       const raw = await readFile(metaFile, 'utf-8')
-      store = JSON.parse(raw) as ImageMeta[]
-      for (const m of store) indexRecord(m)
-      console.log(`[storage] Loaded ${store.length} record(s) from metadata`)
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) {
+        // Legacy flat array format — migrate to nested on next flush
+        store = parsed as ImageMeta[]
+        for (const m of store) indexRecord(m)
+        scheduleFlush()
+        console.log(`[storage] Loaded ${store.length} record(s) from legacy format, migrating...`)
+      } else {
+        // Nested format
+        const nested = parsed as NestedMetadata
+        for (const [tagKey, tagBlock] of Object.entries(nested.tags ?? {})) {
+          const tag = tagKey === '__untagged__' ? undefined : tagKey
+          for (const [setId, setBlock] of Object.entries(tagBlock.sets)) {
+            for (const img of setBlock.images) {
+              const meta: ImageMeta = { ...img, tag, setId, sourceUrl: setBlock.sourceUrl }
+              store.push(meta)
+              indexRecord(meta)
+            }
+          }
+        }
+        console.log(`[storage] Loaded ${store.length} record(s) from metadata`)
+      }
     } catch (err) {
       console.error(`[storage] metadata.json corrupt, starting fresh: ${(err as Error).message}`)
       store = []
