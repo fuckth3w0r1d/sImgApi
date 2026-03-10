@@ -5,6 +5,9 @@ import { addImage, findByUrl, nextPicIndex, findSetIdBySourceUrl } from '../lib/
 import { extractCrawledImages } from '../lib/crawler.js'
 import type { ImageMeta } from '../types.js'
 
+const CONCURRENCY = parseInt(process.env.SEED_CONCURRENCY ?? '5', 10)
+const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS ?? '15000', 10)
+
 const searchCrawl = new Hono()
 
 /**
@@ -58,59 +61,63 @@ searchCrawl.post('/', async (c) => {
   for (const [sourceUrl, imageUrls] of groups) {
     if (saved.length >= limit) break
 
-    const setId = (await findSetIdBySourceUrl(sourceUrl)) ?? nanoid()
-    let picIndex = await nextPicIndex(setId)
+    const setId = findSetIdBySourceUrl(sourceUrl) ?? nanoid()
+    let picIndex = nextPicIndex(setId)
 
-    for (const imgUrl of imageUrls) {
-      if (saved.length >= limit) break
+    // Validate URLs concurrently in batches
+    type Validated = { url: string; mime: string; picIndex: number } | { url: string; reason: string }
 
-      const existing = await findByUrl(imgUrl)
-      if (existing) {
-        skipped.push({ url: imgUrl, reason: 'Already indexed' })
-        continue
-      }
+    const toProcess = imageUrls.slice(0, limit - saved.length)
+    const results: Validated[] = []
 
-      let mime: string
-      try {
-        const headRes = await fetch(imgUrl, {
-          method: 'HEAD',
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Referer': sourceUrl,
-          },
-          signal: AbortSignal.timeout(15000),
+    for (let i = 0; i < toProcess.length; i += CONCURRENCY) {
+      const batch = toProcess.slice(i, i + CONCURRENCY)
+      const settled = await Promise.allSettled(
+        batch.map(async (imgUrl, j): Promise<Validated> => {
+          if (findByUrl(imgUrl)) return { url: imgUrl, reason: 'Already indexed' }
+
+          const headRes = await fetch(imgUrl, {
+            method: 'HEAD',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Referer': sourceUrl,
+            },
+            signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+          })
+          if (!headRes.ok) return { url: imgUrl, reason: `HEAD failed: ${headRes.status}` }
+
+          const mime = (headRes.headers.get('content-type') ?? '').split(';')[0].trim()
+          if (!isAllowedMime(mime)) return { url: imgUrl, reason: `Unsupported MIME: ${mime}` }
+
+          return { url: imgUrl, mime, picIndex: picIndex + i + j }
         })
-        if (!headRes.ok) {
-          skipped.push({ url: imgUrl, reason: `HEAD failed: ${headRes.status}` })
-          continue
-        }
-        mime = (headRes.headers.get('content-type') ?? '').split(';')[0].trim()
-      } catch (err) {
-        skipped.push({ url: imgUrl, reason: `HEAD error: ${(err as Error).message}` })
+      )
+      for (const r of settled) {
+        if (r.status === 'fulfilled') results.push(r.value)
+        else results.push({ url: '', reason: r.reason?.message ?? 'Unknown error' })
+      }
+    }
+
+    // Commit valid results
+    for (const r of results) {
+      if ('reason' in r) {
+        if (r.url) skipped.push({ url: r.url, reason: r.reason })
         continue
       }
-
-      if (!isAllowedMime(mime)) {
-        skipped.push({ url: imgUrl, reason: `Unsupported MIME: ${mime}` })
-        continue
-      }
-
       const id = nanoid()
       const imageMeta: ImageMeta = {
         id,
-        url: imgUrl,
+        url: r.url,
         sourceUrl,
-        mime,
+        mime: r.mime,
         width: 0,
         height: 0,
         uploadedAt: new Date().toISOString(),
         setId,
-        picIndex,
+        picIndex: r.picIndex,
       }
-
-      await addImage(imageMeta)
+      addImage(imageMeta)
       saved.push(imageMeta)
-      picIndex++
     }
   }
 

@@ -3,6 +3,8 @@ import { nanoid } from 'nanoid';
 import { isAllowedMime } from '../lib/validate.js';
 import { addImage, findByUrl, nextPicIndex, findSetIdBySourceUrl } from '../lib/storage.js';
 import { extractCrawledImages } from '../lib/crawler.js';
+const CONCURRENCY = parseInt(process.env.SEED_CONCURRENCY ?? '5', 10);
+const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS ?? '15000', 10);
 const searchCrawl = new Hono();
 /**
  * POST /search-crawl
@@ -46,55 +48,58 @@ searchCrawl.post('/', async (c) => {
     for (const [sourceUrl, imageUrls] of groups) {
         if (saved.length >= limit)
             break;
-        const setId = (await findSetIdBySourceUrl(sourceUrl)) ?? nanoid();
-        let picIndex = await nextPicIndex(setId);
-        for (const imgUrl of imageUrls) {
-            if (saved.length >= limit)
-                break;
-            const existing = await findByUrl(imgUrl);
-            if (existing) {
-                skipped.push({ url: imgUrl, reason: 'Already indexed' });
-                continue;
-            }
-            let mime;
-            try {
+        const setId = findSetIdBySourceUrl(sourceUrl) ?? nanoid();
+        let picIndex = nextPicIndex(setId);
+        const toProcess = imageUrls.slice(0, limit - saved.length);
+        const results = [];
+        for (let i = 0; i < toProcess.length; i += CONCURRENCY) {
+            const batch = toProcess.slice(i, i + CONCURRENCY);
+            const settled = await Promise.allSettled(batch.map(async (imgUrl, j) => {
+                if (findByUrl(imgUrl))
+                    return { url: imgUrl, reason: 'Already indexed' };
                 const headRes = await fetch(imgUrl, {
                     method: 'HEAD',
                     headers: {
                         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                         'Referer': sourceUrl,
                     },
-                    signal: AbortSignal.timeout(15000),
+                    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
                 });
-                if (!headRes.ok) {
-                    skipped.push({ url: imgUrl, reason: `HEAD failed: ${headRes.status}` });
-                    continue;
-                }
-                mime = (headRes.headers.get('content-type') ?? '').split(';')[0].trim();
+                if (!headRes.ok)
+                    return { url: imgUrl, reason: `HEAD failed: ${headRes.status}` };
+                const mime = (headRes.headers.get('content-type') ?? '').split(';')[0].trim();
+                if (!isAllowedMime(mime))
+                    return { url: imgUrl, reason: `Unsupported MIME: ${mime}` };
+                return { url: imgUrl, mime, picIndex: picIndex + i + j };
+            }));
+            for (const r of settled) {
+                if (r.status === 'fulfilled')
+                    results.push(r.value);
+                else
+                    results.push({ url: '', reason: r.reason?.message ?? 'Unknown error' });
             }
-            catch (err) {
-                skipped.push({ url: imgUrl, reason: `HEAD error: ${err.message}` });
-                continue;
-            }
-            if (!isAllowedMime(mime)) {
-                skipped.push({ url: imgUrl, reason: `Unsupported MIME: ${mime}` });
+        }
+        // Commit valid results
+        for (const r of results) {
+            if ('reason' in r) {
+                if (r.url)
+                    skipped.push({ url: r.url, reason: r.reason });
                 continue;
             }
             const id = nanoid();
             const imageMeta = {
                 id,
-                url: imgUrl,
+                url: r.url,
                 sourceUrl,
-                mime,
+                mime: r.mime,
                 width: 0,
                 height: 0,
                 uploadedAt: new Date().toISOString(),
                 setId,
-                picIndex,
+                picIndex: r.picIndex,
             };
-            await addImage(imageMeta);
+            addImage(imageMeta);
             saved.push(imageMeta);
-            picIndex++;
         }
     }
     return c.json({ saved, skipped, requested: limit });

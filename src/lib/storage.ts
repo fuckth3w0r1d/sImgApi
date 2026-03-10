@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, writeFile, mkdir, rename, access } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { ImageMeta } from '../types.js'
@@ -7,71 +7,100 @@ const dataDir = process.env.DATA_DIR ?? './data'
 const metaFile = join(dataDir, 'metadata.json')
 export const cacheDir = process.env.CACHE_DIR ?? './cache'
 
+// In-memory store
+let store: ImageMeta[] = []
+const byId = new Map<string, ImageMeta>()
+const byUrl = new Map<string, ImageMeta>()
+const bySourceUrl = new Map<string, string>() // sourceUrl -> setId
+const picCount = new Map<string, number>()    // setId -> count
+
+let flushTimer: ReturnType<typeof setTimeout> | null = null
+
+function indexRecord(m: ImageMeta): void {
+  byId.set(m.id, m)
+  byUrl.set(m.url, m)
+  if (!bySourceUrl.has(m.sourceUrl)) bySourceUrl.set(m.sourceUrl, m.setId)
+  picCount.set(m.setId, (picCount.get(m.setId) ?? 0) + 1)
+}
+
+function scheduleFlush(): void {
+  if (flushTimer) clearTimeout(flushTimer)
+  flushTimer = setTimeout(async () => {
+    const tmp = metaFile + '.tmp'
+    await writeFile(tmp, JSON.stringify(store, null, 2))
+    await rename(tmp, metaFile)
+  }, 500)
+}
+
 export async function ensureDataDir(): Promise<void> {
   await mkdir(dataDir, { recursive: true })
   await mkdir(cacheDir, { recursive: true })
+  // Load existing metadata into memory
+  if (existsSync(metaFile)) {
+    const raw = await readFile(metaFile, 'utf-8')
+    store = JSON.parse(raw) as ImageMeta[]
+    for (const m of store) indexRecord(m)
+  }
 }
 
 export function getCachePath(id: string, ext?: string): string {
   return join(cacheDir, ext ? `${id}.${ext}` : id)
 }
 
-async function readMeta(): Promise<ImageMeta[]> {
-  if (!existsSync(metaFile)) return []
-  const raw = await readFile(metaFile, 'utf-8')
-  return JSON.parse(raw) as ImageMeta[]
+export async function cacheExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
-async function writeMeta(data: ImageMeta[]): Promise<void> {
-  await writeFile(metaFile, JSON.stringify(data, null, 2))
-}
-
-export async function addImage(meta: ImageMeta): Promise<void> {
-  const data = await readMeta()
-  data.push(meta)
-  await writeMeta(data)
+export function addImage(meta: ImageMeta): void {
+  store.push(meta)
+  indexRecord(meta)
+  scheduleFlush()
 }
 
 export async function removeImage(id: string): Promise<ImageMeta | null> {
-  const data = await readMeta()
-  const idx = data.findIndex((m) => m.id === id)
-  if (idx === -1) return null
-  const [removed] = data.splice(idx, 1)
-  await writeMeta(data)
-  return removed
+  const meta = byId.get(id)
+  if (!meta) return null
+  store = store.filter((m) => m.id !== id)
+  byId.delete(id)
+  byUrl.delete(meta.url)
+  // Rebuild sourceUrl index for this setId if needed
+  const stillHasSource = store.some((m) => m.sourceUrl === meta.sourceUrl)
+  if (!stillHasSource) bySourceUrl.delete(meta.sourceUrl)
+  const count = (picCount.get(meta.setId) ?? 1) - 1
+  if (count <= 0) picCount.delete(meta.setId)
+  else picCount.set(meta.setId, count)
+  scheduleFlush()
+  return meta
 }
 
-export async function findById(id: string): Promise<ImageMeta | null> {
-  const data = await readMeta()
-  return data.find((m) => m.id === id) ?? null
+export function findById(id: string): ImageMeta | null {
+  return byId.get(id) ?? null
 }
 
-export async function findByUrl(url: string): Promise<ImageMeta | null> {
-  const data = await readMeta()
-  return data.find((m) => m.url === url) ?? null
+export function findByUrl(url: string): ImageMeta | null {
+  return byUrl.get(url) ?? null
 }
 
-/** Returns the next picIndex for a given setId (0-based). */
-export async function nextPicIndex(setId: string): Promise<number> {
-  const data = await readMeta()
-  const members = data.filter((m) => m.setId === setId)
-  return members.length
+export function nextPicIndex(setId: string): number {
+  return picCount.get(setId) ?? 0
 }
 
-/** Find existing setId for a given sourceUrl, or return null. */
-export async function findSetIdBySourceUrl(sourceUrl: string): Promise<string | null> {
-  const data = await readMeta()
-  const match = data.find((m) => m.sourceUrl === sourceUrl)
-  return match?.setId ?? null
+export function findSetIdBySourceUrl(sourceUrl: string): string | null {
+  return bySourceUrl.get(sourceUrl) ?? null
 }
 
-export async function listImages(
+export function listImages(
   page: number,
   limit: number,
   mime?: string,
   setId?: string
-): Promise<{ items: ImageMeta[]; total: number }> {
-  let data = await readMeta()
+): { items: ImageMeta[]; total: number } {
+  let data = store
   if (mime) data = data.filter((m) => m.mime === mime)
   if (setId) data = data.filter((m) => m.setId === setId)
   const total = data.length
@@ -87,14 +116,12 @@ export interface SetSummary {
   createdAt: string;
 }
 
-/** Group all images by setId, return one summary per set. */
-export async function listSets(
+export function listSets(
   page: number,
   limit: number
-): Promise<{ items: SetSummary[]; total: number }> {
-  const data = await readMeta()
+): { items: SetSummary[]; total: number } {
   const map = new Map<string, ImageMeta[]>()
-  for (const m of data) {
+  for (const m of store) {
     const arr = map.get(m.setId) ?? []
     arr.push(m)
     map.set(m.setId, arr)
@@ -110,7 +137,6 @@ export async function listSets(
       createdAt: first.uploadedAt,
     })
   }
-  // Sort by createdAt descending
   sets.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   const total = sets.length
   const items = sets.slice((page - 1) * limit, page * limit)
