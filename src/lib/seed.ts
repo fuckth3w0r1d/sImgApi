@@ -150,7 +150,7 @@ export async function seedFromGalleries(): Promise<void> {
     }
   }
 
-  console.log('[seed] Done.')
+  console.log('[seed] Initial seed done.')
 }
 
 /** Refresh galleries from seed config, optionally filtered by tag. Never skips existing sets. */
