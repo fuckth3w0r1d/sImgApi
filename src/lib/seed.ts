@@ -74,39 +74,17 @@ async function processCandidate(
 
 /**
  * Load seed config from config/seed.json (or SEED_CONFIG env var path).
- * Falls back to SEED_GALLERIES env var for legacy support.
  * Returns array of { tag, urls }
  */
 export async function parseSeedConfig(): Promise<{ tag?: string; urls: string[] }[]> {
   const configPath = process.env.SEED_CONFIG ?? './config/seed.json'
-
   try {
     const { readFile } = await import('node:fs/promises')
     const raw = await readFile(configPath, 'utf-8')
     const data = JSON.parse(raw) as { tag?: string; urls: string[] }[]
     if (Array.isArray(data)) return data
-  } catch {
-    // Fall back to legacy SEED_GALLERIES env var
-  }
-
-  const raw = process.env.SEED_GALLERIES ?? ''
-  if (!raw.trim()) return []
-
-  const groups: { tag?: string; urls: string[] }[] = []
-  for (const segment of raw.split(';')) {
-    const trimmed = segment.trim()
-    if (!trimmed) continue
-    if (trimmed.includes('|')) {
-      const pipe = trimmed.indexOf('|')
-      const tag = trimmed.slice(0, pipe).trim()
-      const urls = trimmed.slice(pipe + 1).split(',').map((u) => u.trim()).filter((u) => u.length > 0)
-      if (urls.length > 0) groups.push({ tag, urls })
-    } else {
-      const urls = trimmed.split(',').map((u) => u.trim()).filter((u) => u.length > 0)
-      if (urls.length > 0) groups.push({ urls })
-    }
-  }
-  return groups
+  } catch {}
+  return []
 }
 
 export async function seedFromGalleries(): Promise<void> {
