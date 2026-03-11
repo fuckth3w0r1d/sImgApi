@@ -35,13 +35,14 @@ images.get('/sets', (c) => {
     });
 });
 // Return 3 random images from a random set (optionally filtered by tag)
+// If no tag given, picks a random tag first, then a random set under it
 images.get('/random', (c) => {
     const tag = c.req.query('tag');
     const items = randomFromTag(3, tag);
     if (items.length === 0) {
         return c.json({ error: tag ? `No images found for tag: ${tag}` : 'No images available' }, 404);
     }
-    return c.json({ data: items, setId: items[0].setId, tag: items[0].tag });
+    return c.json({ data: items, setId: items[0].setId, tag: items._tag ?? items[0].tag });
 });
 // Trigger a refresh (re-crawl) of seed galleries, optionally filtered by tag
 images.post('/seed/refresh', async (c) => {

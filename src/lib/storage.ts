@@ -160,16 +160,20 @@ export function updateTagBySourceUrl(sourceUrl: string, tag: string): number {
   return count
 }
 
-/** Pick a random set from a tag (or any set if no tag), return up to n random images. */
-export function randomFromTag(n: number, tag?: string): ImageMeta[] {
-  let setIds: string[]
+/** Pick a random set from a tag (or a random tag if none given), return up to n random images. */
+export function randomFromTag(n: number, tag?: string): ImageMeta[] & { _tag?: string } {
+  let resolvedTag: string
   if (tag) {
     const s = setsByTag.get(tag)
     if (!s || s.size === 0) return []
-    setIds = [...s]
+    resolvedTag = tag
   } else {
-    setIds = [...new Set(store.map((m) => m.setId))]
+    const tags = [...setsByTag.keys()]
+    if (tags.length === 0) return []
+    resolvedTag = tags[Math.floor(Math.random() * tags.length)]
   }
+  const s = setsByTag.get(resolvedTag)!
+  const setIds = [...s]
   if (setIds.length === 0) return []
   const setId = setIds[Math.floor(Math.random() * setIds.length)]
   const members = store.filter((m) => m.setId === setId)
@@ -178,7 +182,9 @@ export function randomFromTag(n: number, tag?: string): ImageMeta[] {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]]
   }
-  return arr.slice(0, n)
+  const result = arr.slice(0, n) as ImageMeta[] & { _tag: string }
+  result._tag = resolvedTag
+  return result
 }
 
 export function findById(id: string): ImageMeta | null {

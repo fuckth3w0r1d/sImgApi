@@ -158,18 +158,23 @@ export function updateTagBySourceUrl(sourceUrl, tag) {
         scheduleFlush();
     return count;
 }
-/** Pick a random set from a tag (or any set if no tag), return up to n random images. */
+/** Pick a random set from a tag (or a random tag if none given), return up to n random images. */
 export function randomFromTag(n, tag) {
-    let setIds;
+    let resolvedTag;
     if (tag) {
         const s = setsByTag.get(tag);
         if (!s || s.size === 0)
             return [];
-        setIds = [...s];
+        resolvedTag = tag;
     }
     else {
-        setIds = [...new Set(store.map((m) => m.setId))];
+        const tags = [...setsByTag.keys()];
+        if (tags.length === 0)
+            return [];
+        resolvedTag = tags[Math.floor(Math.random() * tags.length)];
     }
+    const s = setsByTag.get(resolvedTag);
+    const setIds = [...s];
     if (setIds.length === 0)
         return [];
     const setId = setIds[Math.floor(Math.random() * setIds.length)];
@@ -179,7 +184,9 @@ export function randomFromTag(n, tag) {
         const j = Math.floor(Math.random() * (i + 1));
         [arr[i], arr[j]] = [arr[j], arr[i]];
     }
-    return arr.slice(0, n);
+    const result = arr.slice(0, n);
+    result._tag = resolvedTag;
+    return result;
 }
 export function findById(id) {
     return byId.get(id) ?? null;
