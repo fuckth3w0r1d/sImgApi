@@ -60,29 +60,18 @@ export async function ensureDataDir() {
         try {
             const raw = await readFile(metaFile, 'utf-8');
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-                // Legacy flat array format — migrate to nested on next flush
-                store = parsed;
-                for (const m of store)
-                    indexRecord(m);
-                scheduleFlush();
-                console.log(`[storage] Loaded ${store.length} record(s) from legacy format, migrating...`);
-            }
-            else {
-                // Nested format
-                const nested = parsed;
-                for (const [tagKey, tagBlock] of Object.entries(nested.tags ?? {})) {
-                    const tag = tagKey === '__untagged__' ? undefined : tagKey;
-                    for (const [setId, setBlock] of Object.entries(tagBlock.sets)) {
-                        for (const img of setBlock.images) {
-                            const meta = { ...img, tag, setId, sourceUrl: setBlock.sourceUrl };
-                            store.push(meta);
-                            indexRecord(meta);
-                        }
+            const nested = parsed;
+            for (const [tagKey, tagBlock] of Object.entries(nested.tags ?? {})) {
+                const tag = tagKey === '__untagged__' ? undefined : tagKey;
+                for (const [setId, setBlock] of Object.entries(tagBlock.sets)) {
+                    for (const img of setBlock.images) {
+                        const meta = { ...img, tag, setId, sourceUrl: setBlock.sourceUrl };
+                        store.push(meta);
+                        indexRecord(meta);
                     }
                 }
-                console.log(`[storage] Loaded ${store.length} record(s) from metadata`);
             }
+            console.log(`[storage] Loaded ${store.length} record(s) from metadata`);
         }
         catch (err) {
             console.error(`[storage] metadata.json corrupt, starting fresh: ${err.message}`);

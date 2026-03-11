@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { listImages, listSets, removeImage, removeSet, randomFromTag } from '../lib/storage.js';
+import { refreshByTag } from '../lib/seed.js';
 const images = new Hono();
 // List all images (optionally filtered by setId or mime)
 images.get('/', (c) => {
@@ -41,6 +42,15 @@ images.get('/random', (c) => {
         return c.json({ error: tag ? `No images found for tag: ${tag}` : 'No images available' }, 404);
     }
     return c.json({ data: items, setId: items[0].setId, tag: items[0].tag });
+});
+// Trigger a refresh (re-crawl) of seed galleries, optionally filtered by tag
+images.post('/seed/refresh', async (c) => {
+    const tag = c.req.query('tag');
+    const { queued } = await refreshByTag(tag);
+    if (queued === 0) {
+        return c.json({ error: tag ? `No galleries found for tag: ${tag}` : 'No galleries configured' }, 404);
+    }
+    return c.json({ message: 'Refresh started', queued, tag: tag ?? null });
 });
 images.delete('/sets/:setId', (c) => {
     const setId = c.req.param('setId');
