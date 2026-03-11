@@ -50,7 +50,10 @@ images.get('/random', (c) => {
   if (items.length === 0) {
     return c.json({ error: tag ? `No images found for tag: ${tag}` : 'No images available' }, 404)
   }
-  return c.json({ data: items, setId: items[0].setId, tag: (items as any)._tag ?? items[0].tag })
+  const proto = c.req.header('x-forwarded-proto') ?? new URL(c.req.url).protocol.replace(':', '')
+  const host = c.req.header('x-forwarded-host') ?? c.req.header('host') ?? new URL(c.req.url).host
+  const proxyUrls = items.map((item) => `${proto}://${host}/proxy/${item.id}`)
+  return c.json({ data: items, proxyUrls, setId: items[0].setId, tag: (items as any)._tag ?? items[0].tag })
 })
 
 // Trigger a refresh (re-crawl) of seed galleries, optionally filtered by tag

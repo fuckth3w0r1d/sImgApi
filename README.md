@@ -10,6 +10,53 @@
 - 代理访问图片，本地缓存，减少重复请求
 - 支持手动爬取入库（单页面或直接传 URL 列表）
 
+## 部署
+
+### Nginx 反向代理
+
+将服务运行在本地端口（默认 3000），通过 nginx 对外暴露。`/images/random` 返回的 `proxyUrls` 会根据请求 Host 自动生成正确域名。
+
+HTTP：
+
+```nginx
+server {
+    listen 80;
+    server_name img.yourdomain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+HTTPS（配合 certbot）：
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name img.yourdomain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/img.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/img.yourdomain.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+---
+
 ## 快速开始
 
 ```bash
@@ -112,10 +159,17 @@ GET /health
 ```json
 {
   "data": [ ...ImageMeta ],
+  "proxyUrls": [
+    "https://img.yourdomain.com/proxy/abc123",
+    "https://img.yourdomain.com/proxy/def456",
+    "https://img.yourdomain.com/proxy/ghi789"
+  ],
   "setId": "abc123",
   "tag": "二次元"
 }
 ```
+
+`data` 为原始元数据（含原始 `url`），`proxyUrls` 按顺序对应每张图片的本服务器代理地址，可直接用于 `<img src>` 或下载，自动优先命中本地缓存。`proxyUrls` 的域名根据请求 Host / `X-Forwarded-Host` 自动生成。
 
 #### `POST /images/seed/refresh`
 
