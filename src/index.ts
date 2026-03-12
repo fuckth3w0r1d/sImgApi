@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import { serve } from '@hono/node-server'
 import { Hono } from 'hono'
+import { logger } from 'hono/logger'
 import images from './routes/images.js'
 import searchCrawl from './routes/search-crawl.js'
 import proxy from './routes/proxy.js'
@@ -8,6 +9,8 @@ import { ensureDataDir } from './lib/storage.js'
 import { seedFromGalleries } from './lib/seed.js'
 
 const app = new Hono()
+
+app.use('*', logger())
 
 app.get('/health', (c) => c.json({ status: 'ok' }))
 app.route('/images', images)
